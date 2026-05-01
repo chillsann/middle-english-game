@@ -37,7 +37,6 @@
         .btn { background: #3498db; color: white; border: none; border-radius: 50px; padding: 15px 35px; font-size: 1.2rem; font-weight: bold; cursor: pointer; transition: 0.2s; margin: 5px; box-shadow: 0 5px 0 #1f618d; }
         .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #1f618d; }
         .start-btn { background: #e67e22; box-shadow: 0 5px 0 #b85c0c; font-size: 1.5rem; }
-        .sound-btn { background: #9b59b6; box-shadow: 0 5px 0 #6c3483; font-size: 1rem; padding: 10px 25px; }
         .world-card { background: #fff3cd; border-radius: 25px; padding: 15px; margin: 10px; cursor: pointer; transition: 0.2s; border: 3px solid #f39c12; font-weight: bold; display: inline-block; width: 28%; min-width: 100px; }
         .world-card:hover { background: #ffeaa7; transform: scale(1.03); }
         .world-icon { font-size: 2.5rem; }
@@ -52,6 +51,7 @@
         .review-explain { color: #2c3e50; margin-top: 4px; font-size: 0.9rem; }
         .review-scroll { max-height: 50vh; overflow-y: auto; text-align: left; padding: 5px; }
         .review-label { background: #e74c3c; color: white; border-radius: 20px; padding: 3px 10px; font-size: 0.85rem; }
+        .cat-tag { display: inline-block; background: #3498db; color: white; border-radius: 12px; padding: 2px 10px; font-size: 0.75rem; margin: 2px; }
         @media (max-width: 500px) { .options { grid-template-columns: 1fr; } .world-card { width: 80%; } .question-text { font-size: 1.3rem; } .option-btn { padding: 14px 10px; font-size: 1rem; } }
     </style>
 </head>
@@ -61,8 +61,7 @@
     (function() {
         // ===== 音频系统（微信/安卓/iOS 全兼容）=====
         let _audioCtx = null;
-        let _soundEnabled = false;
-        // 语音播放用的 <audio> 元素（微信/安卓最可靠的方式）
+        let _soundEnabled = true; // 默认开启声音
         let _ttsAudio = null;
 
         function getAudioCtx() {
@@ -74,9 +73,10 @@
         }
 
         function playSound(type) {
+            if (!_soundEnabled) return;
             try {
                 const ctx = getAudioCtx();
-                if (ctx.state === 'suspended') return;
+                if (ctx.state === 'suspended') { ctx.resume(); }
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
                 osc.connect(gain); gain.connect(ctx.destination);
@@ -98,15 +98,21 @@
             } catch(e) {}
         }
 
+        // 首次触摸时解锁AudioContext（移动端必须）
+        function unlockAudio() {
+            try { getAudioCtx(); } catch(e) {}
+        }
+        ['touchstart', 'touchend', 'click', 'pointerdown'].forEach(evt => {
+            document.addEventListener(evt, unlockAudio, { once: true });
+        });
+
         // ===== 语音朗读：audio元素 + 有道TTS（微信/安卓/iOS全兼容）=====
-        // 有道词典发音 API：英式发音 type=1，美式 type=2，国内可直连，无需 key
         function getTTSUrl(text) {
             return 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&type=2';
         }
 
         function speakNow(text) {
-            if (!text) return;
-            // 方案1（优先）：<audio> + 有道TTS —— 微信/安卓/全平台通用
+            if (!text || !_soundEnabled) return;
             try {
                 if (!_ttsAudio) {
                     _ttsAudio = new Audio();
@@ -115,16 +121,13 @@
                 _ttsAudio.pause();
                 _ttsAudio.src = getTTSUrl(text);
                 _ttsAudio.play().catch(() => {
-                    // audio.play() 被阻止时，回退到 speechSynthesis
                     speakNowFallback(text);
                 });
             } catch(e) {
-                // <audio> 不可用时回退
                 speakNowFallback(text);
             }
         }
 
-        // 方案2（回退）：speechSynthesis —— Chrome/Safari 可用，微信不可用
         let _currentUtterance = null;
         let _speechKeepAlive = null;
         function speakNowFallback(text) {
@@ -148,151 +151,308 @@
             }, 100);
         }
 
-        // 首次交互解锁音频
-        function unlockAll() {
-            try { getAudioCtx(); } catch(e) {}
-            _soundEnabled = true;
-        }
-        ['touchstart', 'touchend', 'click', 'pointerdown'].forEach(evt => {
-            document.addEventListener(evt, unlockAll, { once: true });
-        });
-
-        // ===== 初中英语词汇库（新课标三级词汇1600词精选）=====
+        // ===== 初中英语词汇库（新课标三级核心词汇500+）=====
         const MIDDLE_SCHOOL_WORDS = {
             grade7: [
-                "hello","good","morning","afternoon","evening","how","are","you","I","am","fine","thanks","OK","what","is","this","in","English","it","a","map","cup","ruler","pen","orange","jacket","key","quilt","it's","that","spell","please","color","red","yellow","green","blue","black","white","purple","brown","now","see","can","say","my","name","nice","to","meet","too","your","Ms","his","and","her","yes","she","he","no","not","zero","one","two","three","four","five","six","seven","eight","nine","telephone","number","phone","first","last","friend","China","middle","school","first name","last name","family","parent","brother","sister","grandmother","grandfather","grandparent","those","who","these","they","well","have","day","happy","photo","picture","girl","boy","dog","cat","ball","basketball","soccer","volleyball","interesting","boring","fun","difficult","relaxing","watch","TV","read","book","library","classroom","desk","chair","under","come","think","room","their","hat","head","know","radio","clock","tape","model","plane","tidy","but","our","everywhere","always","want","get","late","great","play","sound","interesting","boring","fun","difficult","relaxing","watch","TV","read","book","library","classroom","desk","chair"
+                "hello","good","morning","afternoon","evening","how","are","you","I","am","fine","thanks","OK","what","is","this","in","English","it","a","map","cup","ruler","pen","orange","jacket","key","quilt","it's","that","spell","please","color","red","yellow","green","blue","black","white","purple","brown","now","see","can","say","my","name","nice","to","meet","too","your","Ms","his","and","her","yes","she","he","no","not","zero","one","two","three","four","five","six","seven","eight","nine","telephone","number","phone","first","last","friend","China","middle","school","family","parent","brother","sister","grandmother","grandfather","grandparent","those","who","these","they","well","have","day","happy","photo","picture","girl","boy","dog","cat","ball","basketball","soccer","volleyball","interesting","boring","fun","difficult","relaxing","watch","TV","read","book","library","classroom","desk","chair","under","come","think","room","their","hat","head","know","radio","clock","tape","model","plane","tidy","but","our","everywhere","always","want","get","late","great","play","sound","eat","like","fruit","apple","banana","hamburger","salad","ice-cream","rice","egg","carrot","chicken","breakfast","lunch","dinner","food","vegetable","healthy","habits","fat","star","clothes","store","buy","sale","sell","price","dollar","small","big","short","long","woman","need","look","pair","take","twelve","thirteen","fifteen","eighteen","twenty","thirty","month","January","February","March","April","May","June","July","August","September","October","November","December","birthday","age","old","party","festival","trip","art","dear","student","thing","term","busy","time","hour","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday","free","cool","lesson","geography","history","music","subject","science","teacher","why","because","when","favorite","useful","from","finish","lesson","hour","p.m.","a.m."
             ],
             grade8: [
-                "anyone","anywhere","wonderful","few","quite","most","something","nothing","myself","yourself","seem","bored","someone","diary","activity","decide","try","wonder","difference","top","wait","umbrella","wet","below","enough","hungry","as","hill","duck","dislike","house","should","improve","physical","journal","theater","comfortable","seat","screen","close","ticket","worst","cheaply","song","DJ","choose","carefully","reporter","fresh","comfortably","worse","service","pretty","menu","act","meal","creative","performer","talent","magician","beautifully","role","winner","prize","everybody","example","poor","seriously","crowded","fade","popular","happening","predict","future","believe","environment","peace","sea","build","astronaut","rocket","space","fall","serve","able","question","meaning","discuss","promise","beginning","write","themselves","hobby","own","personal","relationship","cook","doctor","engineer","violinist","pilot","pianist","scientist","college","education","medicine","university","article","resolution","factory","meaning","discuss","promise","beginning","write","themselves","hobby","own","personal","relationship"
+                "anyone","anywhere","wonderful","few","quite","most","something","nothing","myself","yourself","seem","bored","someone","diary","activity","decide","try","wonder","difference","top","wait","umbrella","wet","below","enough","hungry","as","hill","duck","dislike","house","should","improve","physical","journal","theater","comfortable","seat","screen","close","ticket","worst","cheaply","song","choose","carefully","reporter","fresh","comfortably","worse","service","pretty","menu","act","meal","creative","performer","talent","magician","beautifully","role","winner","prize","everybody","example","poor","seriously","crowded","popular","happening","predict","future","believe","environment","peace","sea","build","astronaut","rocket","space","fall","serve","able","question","meaning","discuss","promise","beginning","write","themselves","hobby","own","personal","relationship","cook","doctor","engineer","violinist","pilot","pianist","scientist","college","education","medicine","university","article","resolution","matter","sore","stomachache","toothache","headache","fever","cough","tooth","rest","hurt","passenger","trouble","hit","herself","bandage","sick","knee","nosebleed","breathe","sunburned","climber","risk","accident","situation","kilogram","rock","knife","blood","mean","importance","decision","control","spirit","death","give up","nurse","clean up","cheer","volunteer","lonely","raise","alone","repair","fix","give away","satisfaction","joy","owner","train","understand","change","interest","kindness","clever","understand","copy","return","blind","deaf","imagine","difficulty","open","door","carry","excite","training","kindness","allow","wrong","guess","deal","relation","communication","argue","cloud","instead","whatever","nervous","offer","proper","secondly","explain","clear","copy","return","member","pressure","compete","opinion","skill","typical","football","cut out","quick","continue","push","development","cause","crazy","perhaps","lie","internet","online","especially","depend","develop","independent","fair","unfair","neighbor","drop","since","communicate","explain","copy","return","offer","receive","imagine","connect","allow","argue","either","instead","nervous","proper","explain","clear","guess","deal","relation","communication","opinion","skill","typical","perhaps","cause","fair","unfair","neighbor","depend","develop","independent","especially","drop","since","allow","quick","continue","push","development","pressure","compete","member","stress","compare","compare...with","opinion","crazy","push","football","continue","quick","typical","cut out","skill","competition","training","imagine","satisfaction","raise","alone","volunteer","cheer","clean up","give up","give away","risk","situation","accident","control","spirit","death","importance","decision","mean","hurt","rest","matter","stomachache","toothache","headache","fever","passenger","trouble","herself","bandage","sick","nosebleed","breathe","sunburned","climber","knife","blood","rock","kilogram"
             ],
             grade9: [
-                "textbook","conversation","aloud","pronunciation","sentence","patient","expression","discover","secret","grammar","repeat","note","pal","physics","chemistry","memorize","pattern","pronounce","increase","speed","partner","born","ability","create","brain","active","attention","connect","review","knowledge","lifelong","wisely","polite","request","direction","correct","direct","speaker","whom","impolite","address","underground","course","pardon","rush","suggest","mail","convenient","corner","politely","nearby","central","fascinating","inexpensive","uncrowded","direct","staff","impolite","clerk","department","mall","boss","passport","board","overseas","speak","elbow","gradually","get used to","passage","restroom","stamp","postcard","pardon","washroom","bathroom","quick","pardon","pride","proud","general","introduction","influential","relatively","compare","achievement","progress","remarkable","contribution","education","development","pioneer","publish","generation","intellectual","leader","revolution","founding","principle","spirit","economy","reform","opening","modernization"
+                "textbook","conversation","aloud","pronunciation","sentence","patient","expression","discover","secret","grammar","repeat","note","pal","physics","chemistry","memorize","pattern","pronounce","increase","speed","partner","born","ability","create","brain","active","attention","connect","review","knowledge","lifelong","wisely","polite","request","direction","correct","direct","speaker","whom","impolite","address","underground","course","pardon","rush","suggest","mail","convenient","corner","politely","nearby","central","fascinating","inexpensive","uncrowded","staff","clerk","department","mall","boss","passport","board","overseas","elbow","gradually","get used to","passage","restroom","stamp","postcard","washroom","bathroom","quick","pride","proud","general","introduction","influential","relatively","compare","achievement","progress","remarkable","contribution","development","pioneer","publish","generation","intellectual","leader","revolution","founding","principle","spirit","economy","reform","opening","modernization","invention","invent","drawer","by accident","boil","remain","smell","saint","doubt","legend","scent","lock","earthquake","sudden","bell","biscuit","cookie","musical","instrument","customers","divide","divide...into","basket","popularity","hero","professional","nearly","Olympics","look up to","advantage","disadvantage","reason","avoid","avoid doing","steal","steal...from","mention","fix up","repair","give away","take after","be similar to","hold","go out of one's way","make...feel at home","granddaughter","behave","except","elbow","gradually","suggestion","be supposed to","greet","relax","value","drop by","capital","noon","mad","effort","knock","eastern","worth","manner","table manners","empty","basic","exchange","behave","gradually","suggestion","except","go out of one's way","make...feel at home","granddaughter","relax","value","drop by","capital","mad","effort","knock","eastern","worth","manner","empty","basic","exchange","prefer","lyrics","Australian","electronic","suppose","smooth","spare","director","case","war","dialog","plenty","plenty of","shut","shut off","superhero","once in a while","intelligent","drama","documentary","pain","reflect","perform","abnormal","praise","recall","wound","painful","total","master","praise","recall","wound","painful","total","master","perform","pity","total","praise","wound","recall","painful","master","perform","pity","drama","plenty","suppose","smooth","prefer","director","electronic","Australian","case","war","dialog","shut","superhero","intelligent","documentary","reflect","abnormal","pain","lyrics","spare","shut off","once in a while","environment","recycle","paper","plastic","rubbish","bin","napkin","bottom","coal","ugly","advantage","cost","wooden","plastic","takeaway","bin","shark","fin","cruel","harmful","chain","ecosystem","industry","law","afford","reusable","transportation","suggest","creative","inspiration","project","website","pioneer","popularity","lively","produce","celebration","freedom","saint","legend","steal","lay","dessert","garden","admire","tie","tradition","novel","warmth","spread","lay","dessert","garden","admire","tie","tradition","novel","warmth","spread","steal","celebration","freedom","produce","lively","project","inspiration","creative","afford","reusable","law","industry","ecosystem","harmful","cruel","fin","shark","takeaway","cost","advantage","ugly","coal","bottom","napkin","rubbish","plastic","paper","recycle","wooden","chain","suggest","transportation"
             ]
         };
-        
+
         const ALL_WORDS = [...new Set([...MIDDLE_SCHOOL_WORDS.grade7, ...MIDDLE_SCHOOL_WORDS.grade8, ...MIDDLE_SCHOOL_WORDS.grade9])];
-        
+
         const WORD_MEANING = {
-            "hello":"你好","good":"好的","morning":"早晨","afternoon":"下午","evening":"晚上","how":"怎样","are":"是","you":"你","I":"我","am":"是","fine":"好的","thanks":"谢谢","OK":"好的","what":"什么","is":"是","this":"这个","in":"在...里","English":"英语","it":"它","a":"一个","map":"地图","cup":"杯子","ruler":"尺子","pen":"钢笔","orange":"橙子","jacket":"夹克","key":"钥匙","quilt":"被子","it's":"它是","that":"那个","spell":"拼写","please":"请","color":"颜色","red":"红色","yellow":"黄色","green":"绿色","blue":"蓝色","black":"黑色","white":"白色","purple":"紫色","brown":"棕色","now":"现在","see":"看见","can":"能","say":"说","my":"我的","name":"名字","nice":"美好的","to":"到","meet":"遇见","too":"也","your":"你的","Ms":"女士","his":"他的","and":"和","her":"她的","yes":"是的","she":"她","he":"他","no":"不","not":"不","zero":"零","one":"一","two":"二","three":"三","four":"四","five":"五","six":"六","seven":"七","eight":"八","nine":"九","telephone":"电话","number":"数字","phone":"电话","first":"第一","last":"最后的","friend":"朋友","China":"中国","middle":"中间的","school":"学校","first name":"名","last name":"姓","family":"家庭","parent":"父母","brother":"兄弟","sister":"姐妹","grandmother":"祖母","grandfather":"祖父","grandparent":"祖父母","those":"那些","who":"谁","these":"这些","they":"他们","well":"好的","have":"有","day":"天","happy":"快乐的","photo":"照片","picture":"图片","girl":"女孩","boy":"男孩","dog":"狗","cat":"猫","ball":"球","basketball":"篮球","soccer":"足球","volleyball":"排球","interesting":"有趣的","boring":"无聊的","fun":"有趣的","difficult":"困难的","relaxing":"令人放松的","watch":"观看","TV":"电视","read":"阅读","book":"书","library":"图书馆","classroom":"教室","desk":"书桌","chair":"椅子","under":"在...下面","come":"来","think":"想","room":"房间","their":"他们的","hat":"帽子","head":"头","know":"知道","radio":"收音机","clock":"钟","tape":"磁带","model":"模型","plane":"飞机","tidy":"整洁的","but":"但是","our":"我们的","everywhere":"到处","always":"总是","want":"想要","get":"得到","late":"晚的","great":"太好了","play":"玩","sound":"听起来","boy":"男孩",
-            "anyone":"任何人","anywhere":"任何地方","wonderful":"精彩的","few":"很少的","quite":"相当","most":"大多数","something":"某事","nothing":"没有什么","myself":"我自己","yourself":"你自己","seem":"似乎","bored":"无聊的","someone":"某人","diary":"日记","activity":"活动","decide":"决定","try":"尝试","wonder":"想知道","difference":"差异","top":"顶部","wait":"等待","umbrella":"雨伞","wet":"湿的","below":"在下面","enough":"足够的","hungry":"饥饿的","as":"作为","hill":"小山","duck":"鸭子","dislike":"不喜欢","house":"房子","should":"应该","improve":"改善","physical":"身体的","journal":"日记","theater":"剧院","comfortable":"舒适的","seat":"座位","screen":"屏幕","close":"接近的","ticket":"票","worst":"最差的","cheaply":"便宜地","song":"歌曲","DJ":"音乐主持人","choose":"选择","carefully":"仔细地","reporter":"记者","fresh":"新鲜的","comfortably":"舒适地","worse":"更差的","service":"服务","pretty":"相当","menu":"菜单","act":"表演","meal":"一餐","creative":"有创造力的","performer":"表演者","talent":"天赋","magician":"魔术师","beautifully":"美丽地","role":"角色","winner":"获胜者","prize":"奖品","everybody":"每个人","example":"例子","poor":"贫穷的","seriously":"严肃地","crowded":"拥挤的","fade":"褪色","popular":"流行的","happening":"发生","predict":"预测","future":"未来","believe":"相信","environment":"环境","peace":"和平","sea":"海","build":"建造","astronaut":"宇航员","rocket":"火箭","space":"太空","fall":"落下","serve":"服务","able":"能够","question":"问题","meaning":"意思","discuss":"讨论","promise":"承诺","beginning":"开始","write":"写","themselves":"他们自己","hobby":"爱好","own":"自己的","personal":"个人的","relationship":"关系","cook":"厨师","doctor":"医生","engineer":"工程师","violinist":"小提琴手","pilot":"飞行员","pianist":"钢琴家","scientist":"科学家","college":"大学","education":"教育","medicine":"药","university":"大学","article":"文章","resolution":"决心","factory":"工厂",
-            "textbook":"教科书","conversation":"对话","aloud":"大声地","pronunciation":"发音","sentence":"句子","patient":"有耐心的","expression":"表达","discover":"发现","secret":"秘密","grammar":"语法","repeat":"重复","note":"笔记","pal":"朋友","physics":"物理","chemistry":"化学","memorize":"记住","pattern":"模式","pronounce":"发音","increase":"增加","speed":"速度","partner":"搭档","born":"出生","ability":"能力","create":"创造","brain":"大脑","active":"活跃的","attention":"注意","connect":"联系","review":"复习","knowledge":"知识","lifelong":"终生的","wisely":"明智地","polite":"有礼貌的","request":"请求","direction":"方向","correct":"正确的","direct":"直接的","speaker":"说话者","whom":"谁","impolite":"不礼貌的","address":"地址","underground":"地下的","course":"课程","pardon":"原谅","rush":"匆忙","suggest":"建议","mail":"邮件","convenient":"方便的","corner":"角落","politely":"礼貌地","nearby":"附近的","central":"中心的","fascinating":"迷人的","inexpensive":"不贵的","uncrowded":"不拥挤的","direct":"直接的","staff":"员工","clerk":"职员","department":"部门","mall":"商场","boss":"老板","passport":"护照","board":"板","overseas":"海外的","speak":"说","elbow":"肘部","gradually":"逐渐地","get used to":"习惯于","passage":"段落","restroom":"洗手间","stamp":"邮票","postcard":"明信片","washroom":"洗手间","bathroom":"浴室","quick":"快的","pardon":"原谅","pride":"骄傲","proud":"自豪的","general":"一般的","introduction":"介绍","influential":"有影响力的","relatively":"相对地","compare":"比较","achievement":"成就","progress":"进步","remarkable":"显著的","contribution":"贡献","development":"发展","pioneer":"先锋","publish":"出版","generation":"一代","intellectual":"知识分子","leader":"领导","revolution":"革命","founding":"建立","principle":"原则","spirit":"精神","economy":"经济","reform":"改革","opening":"开放","modernization":"现代化"
+            "hello":"你好","good":"好的","morning":"早晨","afternoon":"下午","evening":"晚上","how":"怎样","are":"是","you":"你","I":"我","am":"是","fine":"好的","thanks":"谢谢","OK":"好的","what":"什么","is":"是","this":"这个","in":"在…里","English":"英语","it":"它","a":"一个","map":"地图","cup":"杯子","ruler":"尺子","pen":"钢笔","orange":"橙子","jacket":"夹克","key":"钥匙","quilt":"被子","it's":"它是","that":"那个","spell":"拼写","please":"请","color":"颜色","red":"红色","yellow":"黄色","green":"绿色","blue":"蓝色","black":"黑色","white":"白色","purple":"紫色","brown":"棕色","now":"现在","see":"看见","can":"能","say":"说","my":"我的","name":"名字","nice":"美好的","to":"到","meet":"遇见","too":"也","your":"你的","Ms":"女士","his":"他的","and":"和","her":"她的","yes":"是的","she":"她","he":"他","no":"不","not":"不","zero":"零","one":"一","two":"二","three":"三","four":"四","five":"五","six":"六","seven":"七","eight":"八","nine":"九","telephone":"电话","number":"数字","phone":"电话","first":"第一","last":"最后的","friend":"朋友","China":"中国","middle":"中间的","school":"学校","family":"家庭","parent":"父母","brother":"兄弟","sister":"姐妹","grandmother":"祖母","grandfather":"祖父","grandparent":"祖父母","those":"那些","who":"谁","these":"这些","they":"他们","well":"好的","have":"有","day":"天","happy":"快乐的","photo":"照片","picture":"图片","girl":"女孩","boy":"男孩","dog":"狗","cat":"猫","ball":"球","basketball":"篮球","soccer":"足球","volleyball":"排球","interesting":"有趣的","boring":"无聊的","fun":"有趣的","difficult":"困难的","relaxing":"令人放松的","watch":"观看","TV":"电视","read":"阅读","book":"书","library":"图书馆","classroom":"教室","desk":"书桌","chair":"椅子","under":"在…下面","come":"来","think":"想","room":"房间","their":"他们的","hat":"帽子","head":"头","know":"知道","radio":"收音机","clock":"钟","tape":"磁带","model":"模型","plane":"飞机","tidy":"整洁的","but":"但是","our":"我们的","everywhere":"到处","always":"总是","want":"想要","get":"得到","late":"晚的","great":"太好了","play":"玩","sound":"听起来","eat":"吃","like":"喜欢","fruit":"水果","apple":"苹果","banana":"香蕉","hamburger":"汉堡包","salad":"沙拉","ice-cream":"冰淇淋","rice":"米饭","egg":"鸡蛋","carrot":"胡萝卜","chicken":"鸡肉","breakfast":"早餐","lunch":"午餐","dinner":"晚餐","food":"食物","vegetable":"蔬菜","healthy":"健康的","habits":"习惯","fat":"胖的","star":"星星","clothes":"衣服","store":"商店","buy":"买","sale":"特价","sell":"卖","price":"价格","dollar":"美元","small":"小的","big":"大的","short":"短的","long":"长的","woman":"女人","need":"需要","look":"看","pair":"一双","take":"拿","twelve":"十二","thirteen":"十三","fifteen":"十五","eighteen":"十八","twenty":"二十","thirty":"三十","month":"月","January":"一月","February":"二月","March":"三月","April":"四月","May":"五月","June":"六月","July":"七月","August":"八月","September":"九月","October":"十月","November":"十一月","December":"十二月","birthday":"生日","age":"年龄","old":"老的","party":"聚会","festival":"节日","trip":"旅行","art":"艺术","dear":"亲爱的","student":"学生","thing":"东西","term":"学期","busy":"忙的","time":"时间","hour":"小时","Monday":"星期一","Tuesday":"星期二","Wednesday":"星期三","Thursday":"星期四","Friday":"星期五","Saturday":"星期六","Sunday":"星期日","free":"空闲的","cool":"酷的","lesson":"课","geography":"地理","history":"历史","music":"音乐","subject":"科目","science":"科学","teacher":"老师","why":"为什么","because":"因为","when":"当…时","favorite":"最喜欢的","useful":"有用的","from":"从","finish":"完成","p.m.":"下午","a.m.":"上午",
+            "anyone":"任何人","anywhere":"任何地方","wonderful":"精彩的","few":"很少的","quite":"相当","most":"大多数","something":"某事","nothing":"没有什么","myself":"我自己","yourself":"你自己","seem":"似乎","bored":"无聊的","someone":"某人","diary":"日记","activity":"活动","decide":"决定","try":"尝试","wonder":"想知道","difference":"差异","top":"顶部","wait":"等待","umbrella":"雨伞","wet":"湿的","below":"在下面","enough":"足够的","hungry":"饥饿的","as":"作为","hill":"小山","duck":"鸭子","dislike":"不喜欢","house":"房子","should":"应该","improve":"改善","physical":"身体的","journal":"期刊","theater":"剧院","comfortable":"舒适的","seat":"座位","screen":"屏幕","close":"接近的","ticket":"票","worst":"最差的","cheaply":"便宜地","song":"歌曲","choose":"选择","carefully":"仔细地","reporter":"记者","fresh":"新鲜的","comfortably":"舒适地","worse":"更差的","service":"服务","pretty":"相当","menu":"菜单","act":"表演","meal":"一餐","creative":"有创造力的","performer":"表演者","talent":"天赋","magician":"魔术师","beautifully":"美丽地","role":"角色","winner":"获胜者","prize":"奖品","everybody":"每个人","example":"例子","poor":"贫穷的","seriously":"严肃地","crowded":"拥挤的","popular":"流行的","happening":"发生","predict":"预测","future":"未来","believe":"相信","environment":"环境","peace":"和平","sea":"海","build":"建造","astronaut":"宇航员","rocket":"火箭","space":"太空","fall":"落下","serve":"服务","able":"能够","question":"问题","meaning":"意思","discuss":"讨论","promise":"承诺","beginning":"开始","write":"写","themselves":"他们自己","hobby":"爱好","own":"自己的","personal":"个人的","relationship":"关系","cook":"厨师","doctor":"医生","engineer":"工程师","violinist":"小提琴手","pilot":"飞行员","pianist":"钢琴家","scientist":"科学家","college":"大学","education":"教育","medicine":"药","university":"大学","article":"文章","resolution":"决心","matter":"重要","sore":"疼痛的","stomachache":"胃痛","toothache":"牙痛","headache":"头痛","fever":"发烧","cough":"咳嗽","tooth":"牙齿","rest":"休息","hurt":"受伤","passenger":"乘客","trouble":"麻烦","hit":"打","herself":"她自己","bandage":"绷带","sick":"生病的","knee":"膝盖","nosebleed":"流鼻血","breathe":"呼吸","sunburned":"晒伤的","climber":"登山者","risk":"风险","accident":"事故","situation":"情况","kilogram":"千克","rock":"岩石","knife":"刀","blood":"血","mean":"意思是","importance":"重要性","decision":"决定","control":"控制","spirit":"精神","death":"死亡","give up":"放弃","nurse":"护士","clean up":"打扫","cheer":"欢呼","volunteer":"志愿者","lonely":"孤独的","raise":"筹集","alone":"单独的","repair":"修理","fix":"修理","give away":"赠送","satisfaction":"满足","joy":"快乐","owner":"主人","train":"训练","understand":"理解","change":"改变","interest":"兴趣","kindness":"善良","clever":"聪明的","copy":"抄写","return":"归还","blind":"盲的","deaf":"聋的","imagine":"想象","difficulty":"困难","open":"打开","door":"门","carry":"携带","excite":"使兴奋","training":"训练","allow":"允许","wrong":"错误的","guess":"猜测","deal":"处理","relation":"关系","communication":"交流","argue":"争吵","cloud":"云","instead":"代替","whatever":"无论什么","nervous":"紧张的","offer":"提供","proper":"适当的","secondly":"第二","explain":"解释","clear":"清楚的","member":"成员","pressure":"压力","compete":"竞争","opinion":"意见","skill":"技能","typical":"典型的","football":"足球","cut out":"删去","quick":"快的","continue":"继续","push":"推","development":"发展","cause":"原因","crazy":"疯狂的","perhaps":"也许","lie":"躺","internet":"互联网","online":"在线的","especially":"尤其","depend":"依赖","develop":"发展","independent":"独立的","fair":"公平的","unfair":"不公平的","neighbor":"邻居","drop":"落下","since":"自从","suggest":"建议","compare":"比较","stress":"压力","competition":"竞争",
+            "textbook":"教科书","conversation":"对话","aloud":"大声地","pronunciation":"发音","sentence":"句子","patient":"有耐心的","expression":"表达","discover":"发现","secret":"秘密","grammar":"语法","repeat":"重复","note":"笔记","pal":"朋友","physics":"物理","chemistry":"化学","memorize":"记住","pattern":"模式","pronounce":"发音","increase":"增加","speed":"速度","partner":"搭档","born":"出生","ability":"能力","create":"创造","brain":"大脑","active":"活跃的","attention":"注意","connect":"联系","review":"复习","knowledge":"知识","lifelong":"终生的","wisely":"明智地","polite":"有礼貌的","request":"请求","direction":"方向","correct":"正确的","direct":"直接的","speaker":"说话者","whom":"谁","impolite":"不礼貌的","address":"地址","underground":"地下的","course":"课程","pardon":"原谅","rush":"匆忙","mail":"邮件","convenient":"方便的","corner":"角落","politely":"礼貌地","nearby":"附近的","central":"中心的","fascinating":"迷人的","inexpensive":"不贵的","uncrowded":"不拥挤的","staff":"员工","clerk":"职员","department":"部门","mall":"商场","boss":"老板","passport":"护照","board":"板","overseas":"海外的","elbow":"肘部","gradually":"逐渐地","get used to":"习惯于","passage":"段落","restroom":"洗手间","stamp":"邮票","postcard":"明信片","washroom":"洗手间","bathroom":"浴室","quick":"快的","pride":"骄傲","proud":"自豪的","general":"一般的","introduction":"介绍","influential":"有影响力的","relatively":"相对地","achievement":"成就","progress":"进步","remarkable":"显著的","contribution":"贡献","pioneer":"先锋","publish":"出版","generation":"一代","intellectual":"知识分子","leader":"领导","revolution":"革命","founding":"建立","principle":"原则","economy":"经济","reform":"改革","opening":"开放","modernization":"现代化","invention":"发明","invent":"发明","drawer":"抽屉","by accident":"偶然地","boil":"煮沸","remain":"保持","smell":"闻","saint":"圣人","doubt":"怀疑","legend":"传说","lock":"锁","earthquake":"地震","sudden":"突然的","bell":"铃","biscuit":"饼干","cookie":"饼干","musical":"音乐的","instrument":"乐器","customers":"顾客","divide":"分开","basket":"篮子","popularity":"流行","hero":"英雄","professional":"专业的","nearly":"几乎","Olympics":"奥运会","look up to":"仰慕","advantage":"优点","disadvantage":"缺点","reason":"原因","avoid":"避免","avoid doing":"避免做","steal":"偷","mention":"提及","fix up":"修理","take after":"像","be similar to":"与…相似","hold":"举行","go out of one's way":"特地","make...feel at home":"使…宾至如归","granddaughter":"孙女","behave":"举止","except":"除了","suggestion":"建议","be supposed to":"应该","greet":"问候","relax":"放松","value":"价值","drop by":"顺便访问","capital":"首都","noon":"中午","mad":"生气的","effort":"努力","knock":"敲","eastern":"东方的","worth":"值得","manner":"方式","table manners":"餐桌礼仪","empty":"空的","basic":"基本的","exchange":"交换","prefer":"更喜欢","lyrics":"歌词","Australian":"澳大利亚的","electronic":"电子的","suppose":"假设","smooth":"平滑的","spare":"空闲的","director":"导演","case":"情况","war":"战争","dialog":"对话","plenty":"大量","plenty of":"大量","shut":"关上","shut off":"关闭","superhero":"超级英雄","once in a while":"偶尔","intelligent":"聪明的","drama":"戏剧","documentary":"纪录片","pain":"痛苦","reflect":"反映","perform":"表演","abnormal":"不正常的","praise":"赞扬","recall":"回忆","wound":"伤口","painful":"痛苦的","total":"总计","master":"掌握","pity":"遗憾","recycle":"回收","paper":"纸","plastic":"塑料","rubbish":"垃圾","bin":"垃圾桶","napkin":"餐巾","bottom":"底部","coal":"煤","ugly":"丑陋的","cost":"花费","wooden":"木制的","takeaway":"外卖","shark":"鲨鱼","fin":"鳍","cruel":"残忍的","harmful":"有害的","chain":"链条","ecosystem":"生态系统","industry":"工业","law":"法律","afford":"负担得起","reusable":"可重复使用的","transportation":"交通","inspiration":"灵感","project":"项目","website":"网站","lively":"生动的","produce":"生产","celebration":"庆祝","freedom":"自由","tradition":"传统","novel":"小说","warmth":"温暖","spread":"传播","dessert":"甜点","garden":"花园","admire":"欣赏","tie":"系"
         };
 
-        // ===== 初中语法题库（新课标语法项目）=====
+        // ===== 初中语法题库（新课标语法项目全覆盖 75题）=====
         const GRAMMAR_QUESTIONS = [
-            // 七年级：be动词、代词、名词、介词、一般现在时
+            // ── 1. be动词与主谓一致 ──
             { question: "I ___ a student.", options: ["am", "is", "are", "be"], correct: 0, explanation: "be动词搭配：I 搭配 am" },
             { question: "She ___ a teacher.", options: ["am", "is", "are", "be"], correct: 1, explanation: "be动词搭配：She/He/It 搭配 is" },
-            { question: "___ are my friends.", options: ["This", "That", "These", "It"], correct: 2, explanation: "These 指代复数名词，意思是'这些'" },
-            { question: "This is ___ apple.", options: ["a", "an", "the", "-"], correct: 1, explanation: "apple 以元音音素开头，用 an" },
-            { question: "I have ___ book.", options: ["a", "an", "the", "-"], correct: 0, explanation: "book 以辅音音素开头，用 a" },
-            { question: "___ color is it?", options: ["What", "How", "Where", "Who"], correct: 0, explanation: "What color 用来询问颜色" },
             { question: "My name ___ Tom.", options: ["am", "is", "are", "be"], correct: 1, explanation: "My name 是单数，搭配 is" },
-            { question: "___ you like apples?", options: ["Do", "Does", "Are", "Is"], correct: 0, explanation: "一般疑问句：You 搭配 Do" },
+            { question: "Physics ___ my favorite subject.", options: ["is", "are", "am", "be"], correct: 0, explanation: "学科名称（physics数学/physics物理/news消息）虽以s结尾，但作为学科名是单数，用 is" },
+            { question: "The news ___ very exciting.", options: ["is", "are", "am", "be"], correct: 0, explanation: "news 是不可数名词，谓语动词用单数 is" },
+            { question: "Everyone ___ here now.", options: ["is", "are", "am", "be"], correct: 0, explanation: "everyone/everybody 是不定代词，谓语动词用单数" },
+            { question: "Neither he nor I ___ right.", options: ["am", "is", "are", "be"], correct: 0, explanation: "neither...nor 就近原则，靠近I，用 am" },
+            { question: "Not only you but also he ___ wrong.", options: ["is", "are", "am", "be"], correct: 0, explanation: "not only...but also 就近原则，靠近he，用 is" },
+
+            // ── 2. 名词与冠词 ──
+            { question: "This is ___ apple.", options: ["a", "an", "the", "不填"], correct: 1, explanation: "apple 以元音音素开头，用 an" },
+            { question: "I have ___ book.", options: ["a", "an", "the", "不填"], correct: 0, explanation: "book 以辅音音素开头，用 a" },
+            { question: "I like ___ .", options: ["apple", "apples", "an apple", "the apple"], correct: 1, explanation: "复数名词表示一类事物，用 apples" },
+            { question: "There are some ___ on the table.", options: ["tomatos", "tomatoes", "tomato", "tomato's"], correct: 1, explanation: "tomato 的复数加 -es：tomatoes" },
+            { question: "He gave me some ___ on learning English.", options: ["advice", "advices", "advise", "advises"], correct: 0, explanation: "advice 是不可数名词，没有复数形式" },
+            { question: "These ___ mothers are teachers.", options: ["girl's", "girls'", "girls", "girl"], correct: 1, explanation: "复数名词所有格：girls' 表示'女孩们的'" },
+            { question: "___ sun rises in the east.", options: ["A", "An", "The", "不填"], correct: 2, explanation: "独一无二的事物（sun/moon/earth）前用 the" },
+            { question: "He can play ___ piano very well.", options: ["a", "an", "the", "不填"], correct: 2, explanation: "演奏乐器：play + the + 乐器名" },
+            { question: "I have ___ umbrella.", options: ["a", "an", "the", "不填"], correct: 1, explanation: "umbrella 以元音音素开头，用 an" },
+
+            // ── 3. 代词 ──
+            { question: "___ are my friends.", options: ["This", "That", "These", "It"], correct: 2, explanation: "These 指代复数名词，意思是'这些'" },
+            { question: "The book is ___. She bought ___ yesterday.", options: ["hers, it", "her, it", "hers, one", "her, one"], correct: 0, explanation: "hers 是名词性物主代词（= her book）；it 指代上文提到的那本书" },
+            { question: "I don't like this shirt. Please show me ___ .", options: ["other", "another", "the other", "others"], correct: 1, explanation: "another 表示'另一个'（无范围限定）" },
+            { question: "There are 40 students. Some are reading, ___ are writing.", options: ["other", "another", "the other", "the others"], correct: 3, explanation: "the others = the other students（范围确定时的'其余全部'）" },
+            { question: "I have two pens. One is red, ___ is blue.", options: ["other", "another", "the other", "others"], correct: 2, explanation: "两者中的'另一个'用 the other" },
+            { question: "—Who is knocking at the door? —___ must be Tom.", options: ["He", "She", "It", "That"], correct: 2, explanation: "不确定是谁时，用 It 指代" },
+
+            // ── 4. 介词与固定搭配 ──
+            { question: "The book is ___ the desk.", options: ["in", "on", "under", "at"], correct: 1, explanation: "on 表示在…上面（与表面接触）" },
+            { question: "She is good ___ math.", options: ["in", "on", "at", "for"], correct: 2, explanation: "be good at 擅长…" },
+            { question: "I agree ___ you.", options: ["with", "on", "at", "for"], correct: 0, explanation: "agree with sb. 同意某人" },
+            { question: "I'm interested ___ science.", options: ["in", "on", "at", "for"], correct: 0, explanation: "be interested in 对…感兴趣" },
+            { question: "He has been away ___ two weeks.", options: ["in", "for", "since", "at"], correct: 1, explanation: "for + 一段时间，表示持续" },
+            { question: "I'll meet you ___ the morning of May 1st.", options: ["in", "on", "at", "for"], correct: 1, explanation: "具体某天的早上用 on（on the morning of...）" },
+            { question: "My mother is proud ___ me.", options: ["of", "in", "at", "for"], correct: 0, explanation: "be proud of 为…感到自豪" },
+            { question: "He is famous ___ his paintings.", options: ["as", "for", "with", "of"], correct: 1, explanation: "be famous for 因…而闻名" },
+
+            // ── 5. 一般现在时 ──
             { question: "She ___ apples.", options: ["like", "likes", "liking", "to like"], correct: 1, explanation: "一般现在时：She 是第三人称单数，动词加 s" },
             { question: "I ___ like bananas.", options: ["don't", "doesn't", "am not", "isn't"], correct: 0, explanation: "否定句：I 搭配 don't" },
-            { question: "Where ___ my books?", options: ["is", "are", "am", "be"], correct: 1, explanation: "books 是复数，用 are" },
-            { question: "The book is ___ the desk.", options: ["in", "on", "under", "at"], correct: 1, explanation: "on 表示在...上面（与表面接触）" },
-            { question: "I ___ a soccer ball.", options: ["has", "have", "am", "is"], correct: 1, explanation: "I 搭配 have，表示'有'" },
-            { question: "He ___ a tennis racket.", options: ["have", "has", "is", "are"], correct: 1, explanation: "He 是第三人称单数，用 has" },
-            { question: "Let's ___ sports.", options: ["play", "plays", "playing", "to play"], correct: 0, explanation: "Let's + 动词原形" },
-            { question: "That sounds ___ .", options: ["well", "good", "nicely", "fine"], correct: 1, explanation: "sound 是系动词，后接形容词 good" },
-            { question: "I like ___ .", options: ["apple", "apples", "an apple", "the apple"], correct: 1, explanation: "复数名词表示一类事物，用 apples" },
             { question: "She ___ TV every day.", options: ["watch", "watches", "watching", "to watch"], correct: 1, explanation: "一般现在时：She 是第三人称单数，watch → watches" },
             { question: "What time ___ you get up?", options: ["do", "does", "are", "is"], correct: 0, explanation: "疑问句：You 搭配 Do" },
-            { question: "There ___ a book on the desk.", options: ["is", "are", "am", "be"], correct: 0, explanation: "there be 句型：单数名词用 is" },
-            { question: "There ___ some water in the bottle.", options: ["is", "are", "am", "be"], correct: 0, explanation: "there be 句型：不可数名词用 is" },
-            { question: "There ___ three cats under the tree.", options: ["is", "are", "am", "be"], correct: 1, explanation: "there be 句型：复数名词用 are" },
-            { question: "___ any milk in the glass?", options: ["Is there", "Are there", "Do there", "Does there"], correct: 0, explanation: "there be 疑问句：不可数名词用 Is there" },
 
-            // 八年级：一般过去时、比较级、将来时、情态动词
+            // ── 6. 一般过去时 ──
             { question: "I went to the movies ___ .", options: ["yesterday", "tomorrow", "next week", "now"], correct: 0, explanation: "一般过去时：yesterday 表示过去" },
             { question: "She ___ at home yesterday.", options: ["stay", "stays", "stayed", "staying"], correct: 2, explanation: "一般过去时：stay → stayed" },
             { question: "I ___ go to school yesterday.", options: ["don't", "didn't", "doesn't", "am not"], correct: 1, explanation: "一般过去时否定：didn't + 动词原形" },
             { question: "___ you go to the park last Sunday?", options: ["Do", "Does", "Did", "Are"], correct: 2, explanation: "一般过去时疑问句：Did + 主语 + 动词原形" },
-            { question: "I'm ___ than you.", options: ["tall", "taller", "tallest", "more tall"], correct: 1, explanation: "比较级：两者比较用 taller" },
-            { question: "She is the ___ student in our class.", options: ["tall", "taller", "tallest", "most tall"], correct: 2, explanation: "最高级：三者以上比较用 tallest（tall的最高级）" },
-            { question: "I think math is ___ than English.", options: ["difficult", "more difficult", "most difficult", "difficulter"], correct: 1, explanation: "多音节形容词比较级：more + 形容词原级" },
-            { question: "This book is ___ .", options: ["interesting", "more interesting", "most interesting", "interestinger"], correct: 0, explanation: "系动词后接形容词原级描述特征" },
-            { question: "I plan ___ for a walk.", options: ["go", "to go", "going", "goes"], correct: 1, explanation: "plan to + 动词原形" },
-            { question: "She decided ___ a new bike.", options: ["buy", "to buy", "buying", "buys"], correct: 1, explanation: "decide to + 动词原形" },
-            { question: "I hope ___ a doctor.", options: ["be", "to be", "being", "am"], correct: 1, explanation: "hope to + 动词原形" },
-            { question: "What do you want ___ when you grow up?", options: ["be", "to be", "being", "are"], correct: 1, explanation: "want to + 动词原形" },
-            { question: "I'm going to ___ a scientist.", options: ["am", "be", "being", "are"], correct: 1, explanation: "be going to + 动词原形" },
-            { question: "If it rains, we ___ stay at home.", options: ["will", "would", "shall", "can"], correct: 0, explanation: "if条件句：主句用一般将来时" },
-            { question: "I will call you when I ___ there.", options: ["get", "will get", "gets", "getting"], correct: 0, explanation: "时间状语从句：when从句用一般现在时表将来" },
-            { question: "She is good ___ math.", options: ["in", "on", "at", "for"], correct: 2, explanation: "be good at 擅长..." },
-            { question: "I agree ___ you.", options: ["with", "on", "at", "for"], correct: 0, explanation: "agree with sb. 同意某人" },
-            { question: "What ___ if there is no water?", options: ["happen", "happens", "will happen", "happened"], correct: 2, explanation: "if条件句：主句用一般将来时" },
-            { question: "I'm ___ tired ___ walk.", options: ["too, to", "so, that", "very, to", "such, that"], correct: 0, explanation: "too + adj. + to do 太...而不能..." },
-            { question: "He is ___ a clever boy ___ we all like him.", options: ["too, to", "so, that", "very, to", "such, that"], correct: 1, explanation: "so + adj. + that 如此...以至于..." },
 
-            // 九年级：现在完成时、被动语态、定语从句、宾语从句
+            // ── 7. 一般将来时 ──
+            { question: "I'm going to ___ a scientist.", options: ["am", "be", "being", "are"], correct: 1, explanation: "be going to + 动词原形" },
+            { question: "If it rains, we ___ stay at home.", options: ["will", "would", "shall", "can"], correct: 0, explanation: "if条件句：主句用一般将来时 will" },
+            { question: "What ___ if there is no water?", options: ["happen", "happens", "will happen", "happened"], correct: 2, explanation: "if条件句：主句用一般将来时 will happen" },
+
+            // ── 8. 现在进行时 ──
+            { question: "Look! The children ___ in the park.", options: ["play", "plays", "are playing", "played"], correct: 2, explanation: "Look! 提示正在发生的动作，用现在进行时：are playing" },
+            { question: "—Where is Tom? —He ___ basketball.", options: ["plays", "played", "is playing", "has played"], correct: 2, explanation: "询问此刻正在做某事，用现在进行时" },
+            { question: "Be quiet! The baby ___ .", options: ["sleeps", "slept", "is sleeping", "has slept"], correct: 2, explanation: "Be quiet! 提示此刻正在发生，用现在进行时" },
+            { question: "Listen! Someone ___ at the door.", options: ["knock", "knocks", "is knocking", "knocked"], correct: 2, explanation: "Listen! 提示正在发生的动作，用现在进行时" },
+
+            // ── 9. 过去进行时 ──
+            { question: "I ___ my homework at 8 o'clock last night.", options: ["do", "did", "was doing", "am doing"], correct: 2, explanation: "过去某个时刻正在做的事，用过去进行时：was doing" },
+            { question: "While I ___ TV, the phone rang.", options: ["watch", "watched", "was watching", "am watching"], correct: 2, explanation: "while 引导过去进行时的动作：was watching" },
+            { question: "They ___ cards when I came in.", options: ["play", "played", "were playing", "are playing"], correct: 2, explanation: "过去某时正在做的动作，用过去进行时：were playing" },
+
+            // ── 10. 现在完成时 ──
             { question: "I have ___ my homework.", options: ["finish", "finishes", "finished", "finishing"], correct: 2, explanation: "现在完成时：have/has + 过去分词" },
             { question: "She has ___ to Beijing.", options: ["go", "went", "gone", "been"], correct: 3, explanation: "have/has been to 去过某地（已回来）" },
             { question: "I ___ never seen such a big apple.", options: ["has", "have", "am", "do"], correct: 1, explanation: "现在完成时：I 搭配 have" },
             { question: "___ you ever been to Paris?", options: ["Do", "Does", "Have", "Has"], correct: 2, explanation: "现在完成时疑问句：Have + 主语 + been" },
             { question: "I have lived here ___ 10 years.", options: ["for", "since", "in", "at"], correct: 0, explanation: "现在完成时：for + 一段时间" },
             { question: "He has studied English ___ 2010.", options: ["for", "since", "in", "at"], correct: 1, explanation: "现在完成时：since + 时间点" },
-            { question: "This is the most ___ book I've ever read.", options: ["interest", "interesting", "interested", "interests"], correct: 1, explanation: "most + 多音节形容词原级构成最高级" },
-            { question: "I'm interested ___ science.", options: ["in", "on", "at", "for"], correct: 0, explanation: "be interested in 对...感兴趣" },
+
+            // ── 11. 被动语态 ──
+            { question: "English ___ in many countries.", options: ["speaks", "is spoken", "spoke", "was spoken"], correct: 1, explanation: "被动语态：一般现在时被动 is/are + 过去分词" },
+            { question: "The book ___ by Lu Xun.", options: ["wrote", "was written", "written", "writes"], correct: 1, explanation: "被动语态：一般过去时被动 was/were + 过去分词" },
+            { question: "The bridge ___ last year.", options: ["built", "was built", "is built", "has built"], correct: 1, explanation: "被动语态：last year 表示过去，用 was built" },
+            { question: "Trees ___ in spring every year.", options: ["plant", "are planted", "planted", "were planted"], correct: 1, explanation: "被动语态：every year 表示习惯性，用一般现在时被动 are planted" },
+
+            // ── 12. 非谓语动词 ──
+            { question: "I plan ___ for a walk.", options: ["go", "to go", "going", "goes"], correct: 1, explanation: "plan to + 动词原形" },
+            { question: "She decided ___ a new bike.", options: ["buy", "to buy", "buying", "buys"], correct: 1, explanation: "decide to + 动词原形" },
+            { question: "I hope ___ a doctor.", options: ["be", "to be", "being", "am"], correct: 1, explanation: "hope to + 动词原形" },
+            { question: "What do you want ___ when you grow up?", options: ["be", "to be", "being", "are"], correct: 1, explanation: "want to + 动词原形" },
             { question: "Could you please ___ me the salt?", options: ["pass", "to pass", "passing", "passed"], correct: 0, explanation: "Could you please + 动词原形" },
             { question: "I used to ___ afraid of dogs.", options: ["be", "am", "being", "was"], correct: 0, explanation: "used to + 动词原形，表示过去常常" },
             { question: "I'm used to ___ up early.", options: ["get", "getting", "got", "gets"], correct: 1, explanation: "be used to + doing 习惯于做某事" },
+            { question: "Would you mind ___ the window?", options: ["open", "opening", "to open", "opened"], correct: 1, explanation: "would you mind + doing 你介意…吗？" },
+            { question: "The boy stopped ___ and looked up.", options: ["cry", "to cry", "crying", "cried"], correct: 2, explanation: "stop doing 停止正在做的事；stop to do 停下来去做另一件事" },
+            { question: "Remember ___ the door when you leave.", options: ["close", "closing", "to close", "closed"], correct: 2, explanation: "remember to do 记得去做（还没做）；remember doing 记得做过" },
+            { question: "I enjoy ___ music after school.", options: ["listen to", "listening to", "to listen to", "listened to"], correct: 1, explanation: "enjoy + doing 喜欢做某事" },
+            { question: "He practice ___ English every morning.", options: ["speak", "speaking", "to speak", "spoke"], correct: 1, explanation: "practice + doing 练习做某事" },
+
+            // ── 13. 情态动词 ──
             { question: "___ I use your phone?", options: ["Must", "Can", "Should", "Would"], correct: 1, explanation: "Can I...? 用于请求许可" },
             { question: "You ___ finish your homework first.", options: ["must", "can", "may", "could"], correct: 0, explanation: "must 表示必须" },
+            { question: "You ___ be tired after the long journey.", options: ["can", "must", "should", "need"], correct: 1, explanation: "must 表肯定推测'一定'，语气最强" },
+            { question: "You ___ smoke here. It's not allowed.", options: ["mustn't", "needn't", "may not", "couldn't"], correct: 0, explanation: "mustn't 表示禁止'不允许'" },
+            { question: "—Must I go now? —No, you ___ .", options: ["mustn't", "can't", "needn't", "won't"], correct: 2, explanation: "Must I...? 的否定回答用 needn't（不必）" },
+
+            // ── 14. 感叹句 ──
+            { question: "What ___ beautiful music!", options: ["a", "an", "the", "不填"], correct: 3, explanation: "感叹句：What + 形容词 + 不可数名词，不用a/an" },
+            { question: "___ interesting the story is!", options: ["What", "What a", "How", "How a"], correct: 2, explanation: "感叹句：How + 形容词/副词 + 主语 + 谓语！" },
+            { question: "___ a clever boy he is!", options: ["What", "How", "What an", "How a"], correct: 0, explanation: "感叹句：What + a/an + 形容词 + 可数名词单数！" },
+            { question: "___ heavy the box is!", options: ["What", "How", "What a", "How a"], correct: 1, explanation: "感叹句：How + 形容词 + 主语 + 谓语！" },
+            { question: "___ good news it is!", options: ["What", "What a", "How", "How a"], correct: 0, explanation: "news 是不可数名词，用 What + 形容词 + 不可数名词！" },
+
+            // ── 15. 祈使句 ──
+            { question: "Please ___ quiet in the library.", options: ["be", "are", "being", "to be"], correct: 0, explanation: "祈使句：Please + 动词原形" },
+            { question: "___ forget to bring your homework.", options: ["Not", "Don't", "Doesn't", "Isn't"], correct: 1, explanation: "否定祈使句：Don't + 动词原形" },
+            { question: "___ hard, and you will succeed.", options: ["Work", "Working", "To work", "Worked"], correct: 0, explanation: "祈使句 + and/or + 将来时：Work hard, and... 努力工作，那么…" },
+            { question: "___ late for school again.", options: ["Not be", "Don't be", "Don't", "Isn't"], correct: 1, explanation: "否定祈使句：Don't be + 形容词" },
+
+            // ── 16. 反意疑问句 ──
+            { question: "You are a student, ___?", options: ["are you", "aren't you", "don't you", "do you"], correct: 1, explanation: "反意疑问句：前肯后否，You are → aren't you" },
+            { question: "She can't swim, ___?", options: ["can she", "can't she", "does she", "doesn't she"], correct: 0, explanation: "反意疑问句：前否后肯，can't → can she" },
+            { question: "He has finished his homework, ___?", options: ["hasn't he", "has he", "doesn't he", "didn't he"], correct: 0, explanation: "反意疑问句：has finished 是现在完成时，has → hasn't he" },
+            { question: "Let's go home, ___?", options: ["will you", "shall we", "do we", "don't we"], correct: 1, explanation: "Let's... 反意疑问句用 shall we" },
+            { question: "There is a pen on the desk, ___?", options: ["isn't it", "isn't there", "is there", "aren't there"], correct: 1, explanation: "There be 句型的反意疑问句用 isn't/aren't there" },
+            { question: "Don't be late, ___?", options: ["do you", "will you", "are you", "shall we"], correct: 1, explanation: "否定祈使句的反意疑问句用 will you" },
+
+            // ── 17. 并列句 ──
+            { question: "My mother is ill, ___ I have to look after her.", options: ["so", "but", "or", "and"], correct: 0, explanation: "so 表示因果关系：因此" },
+            { question: "Hurry up, ___ you'll be late.", options: ["and", "but", "or", "so"], correct: 2, explanation: "or 表示'否则'：Hurry up, or... 快点，否则…" },
+            { question: "He is young, ___ he knows a lot.", options: ["and", "but", "or", "so"], correct: 1, explanation: "but 表示转折：但是" },
+            { question: "Work hard, ___ your dream will come true.", options: ["and", "but", "or", "so"], correct: 0, explanation: "祈使句 + and + 陈述句：…那么…" },
+
+            // ── 18. 宾语从句 ──
             { question: "I don't know ___ to do.", options: ["what", "how", "where", "when"], correct: 0, explanation: "what to do 做什么（what作do的宾语）" },
             { question: "Could you tell me ___ the post office is?", options: ["what", "how", "where", "when"], correct: 2, explanation: "where 引导宾语从句，询问地点" },
             { question: "I wonder ___ he will come.", options: ["that", "if", "which", "who"], correct: 1, explanation: "if 引导宾语从句，表示'是否'" },
+            { question: "I don't know ___ he has arrived.", options: ["that", "whether", "which", "what"], correct: 1, explanation: "whether 引导宾语从句，表示'是否'（常与or not连用）" },
+            { question: "He asked me ___ I liked music.", options: ["that", "if", "what", "which"], correct: 1, explanation: "宾语从句：主句过去时，从句也用过去时；if 表示'是否'" },
+            { question: "The teacher told us that the earth ___ around the sun.", options: ["goes", "went", "is going", "has gone"], correct: 0, explanation: "宾语从句：客观真理不受主句时态影响，仍用一般现在时" },
+
+            // ── 19. 状语从句 ──
+            { question: "I will call you when I ___ there.", options: ["get", "will get", "gets", "getting"], correct: 0, explanation: "时间状语从句：when从句用一般现在时表将来" },
+            { question: "I'm ___ tired ___ walk.", options: ["too, to", "so, that", "very, to", "such, that"], correct: 0, explanation: "too + adj. + to do 太…而不能…" },
+            { question: "He is ___ a clever boy ___ we all like him.", options: ["too, to", "so, that", "very, to", "such, that"], correct: 1, explanation: "so + adj. + that 如此…以至于…" },
+            { question: "___ it rained heavily, he still went to school.", options: ["Although", "Because", "If", "When"], correct: 0, explanation: "Although 虽然…（但）…，不能与 but 同时使用" },
+            { question: "He didn't go to school ___ he was ill.", options: ["although", "because", "if", "when"], correct: 1, explanation: "because 引导原因状语从句：因为" },
+            { question: "I will wait ___ you come back.", options: ["until", "because", "although", "if"], correct: 0, explanation: "until 引导时间状语从句：直到…" },
+            { question: "___ you work hard, you will pass the exam.", options: ["If", "Unless", "Although", "Because"], correct: 0, explanation: "if 引导条件状语从句：如果…" },
+
+            // ── 20. 定语从句 ──
             { question: "The girl ___ is standing there is my sister.", options: ["who", "which", "whose", "what"], correct: 0, explanation: "who 引导定语从句，修饰人（作主语）" },
             { question: "This is the book ___ I bought yesterday.", options: ["who", "which", "whose", "where"], correct: 1, explanation: "which 引导定语从句，修饰物（作宾语可省略）" },
-            { question: "I was ___ moved by the story.", options: ["deep", "deeply", "depth", "deeping"], correct: 1, explanation: "deeply 是副词，修饰动词 moved" },
-            { question: "We should ___ the old.", options: ["take care", "take care of", "take after", "take off"], correct: 1, explanation: "take care of 照顾" },
-            { question: "English ___ in many countries.", options: ["speaks", "is spoken", "spoke", "was spoken"], correct: 1, explanation: "被动语态：一般现在时被动 is/are + 过去分词" },
-            { question: "The book ___ by Lu Xun.", options: ["wrote", "was written", "written", "writes"], correct: 1, explanation: "被动语态：一般过去时被动 was/were + 过去分词" },
+            { question: "The man ___ hair is white is my teacher.", options: ["who", "which", "whose", "whom"], correct: 2, explanation: "whose 引导定语从句，表示'…的'（作定语）" },
+            { question: "This is the place ___ we met for the first time.", options: ["which", "who", "where", "whose"], correct: 2, explanation: "where 引导定语从句，修饰地点名词，在从句中作地点状语" },
+            { question: "I'll never forget the day ___ I came to this school.", options: ["which", "that", "when", "where"], correct: 2, explanation: "when 引导定语从句，修饰时间名词，在从句中作时间状语" },
+
+            // ── 21. 构词法 ──
+            { question: "The ___ (teach) in our school are very kind.", options: ["teach", "teachers", "teaches", "teaching"], correct: 1, explanation: "构词法：teach + -er → teacher 老师；复数 teachers" },
+            { question: "It's very ___ (help) to learn English well.", options: ["help", "helpful", "helpless", "helping"], correct: 1, explanation: "构词法：help + -ful → helpful 有帮助的" },
+            { question: "___ (luck), he passed the exam.", options: ["Luck", "Lucky", "Luckily", "Unlucky"], correct: 2, explanation: "构词法：luck + -ily → luckily 幸运地（副词修饰全句）" },
+            { question: "We should protect the ___ (nature) environment.", options: ["nature", "natural", "naturally", "naturing"], correct: 1, explanation: "构词法：nature + -al → natural 自然的（形容词修饰名词）" },
+            { question: "The ___ ( invent) of the computer changed the world.", options: ["invent", "invents", "invention", "inventing"], correct: 2, explanation: "构词法：invent + -tion → invention 发明（名词）" },
+            { question: "She is a ___ (create) girl. She always has new ideas.", options: ["create", "creative", "creation", "creating"], correct: 1, explanation: "构词法：create + -ive → creative 有创造力的" },
+            { question: "The boy was ___ (happy) because he lost his dog.", options: ["happy", "unhappy", "happily", "unhappily"], correct: 1, explanation: "构词法：happy + un- → unhappy 不开心的（形容词作表语）" },
+
+            // ── 22. 比较等级 ──
+            { question: "I'm ___ than you.", options: ["tall", "taller", "tallest", "more tall"], correct: 1, explanation: "比较级：两者比较用 taller" },
+            { question: "She is the ___ student in our class.", options: ["tall", "taller", "tallest", "most tall"], correct: 2, explanation: "最高级：三者以上比较用 tallest" },
+            { question: "I think math is ___ than English.", options: ["difficult", "more difficult", "most difficult", "difficulter"], correct: 1, explanation: "多音节形容词比较级：more + 形容词原级" },
+            { question: "This is the most ___ book I've ever read.", options: ["interest", "interesting", "interested", "interests"], correct: 1, explanation: "most + 多音节形容词原级构成最高级" },
+            { question: "The ___ you work, the ___ result you'll get.", options: ["hard, good", "harder, better", "hardest, best", "more hard, more good"], correct: 1, explanation: "the + 比较级, the + 比较级：越…越…" },
+
+            // ── 23. there be 句型 ──
+            { question: "There ___ a book on the desk.", options: ["is", "are", "am", "be"], correct: 0, explanation: "there be 句型：单数名词用 is" },
+            { question: "There ___ some water in the bottle.", options: ["is", "are", "am", "be"], correct: 0, explanation: "there be 句型：不可数名词用 is" },
+            { question: "There ___ three cats under the tree.", options: ["is", "are", "am", "be"], correct: 1, explanation: "there be 句型：复数名词用 are" },
+            { question: "___ any milk in the glass?", options: ["Is there", "Are there", "Do there", "Does there"], correct: 0, explanation: "there be 疑问句：不可数名词用 Is there" },
+
+            // ── 24. it 的用法 ──
             { question: "___ is important to learn English well.", options: ["It", "This", "That", "One"], correct: 0, explanation: "It 作形式主语，真正主语是 to learn English well" },
-            { question: "I found ___ difficult to learn math.", options: ["it", "that", "this", "one"], correct: 0, explanation: "it 作形式宾语，真正宾语是 to learn math" }
+            { question: "I found ___ difficult to learn math.", options: ["it", "that", "this", "one"], correct: 0, explanation: "it 作形式宾语，真正宾语是 to learn math" },
+
+            // ── 25. 副词 ──
+            { question: "I was ___ moved by the story.", options: ["deep", "deeply", "depth", "deeping"], correct: 1, explanation: "deeply 是副词，修饰动词 moved" },
+            { question: "He drives ___ .", options: ["careful", "carefully", "care", "careless"], correct: 1, explanation: "修饰动词 drives 用副词 carefully" },
+
+            // ── 26. 固定搭配与短语 ──
+            { question: "We should ___ the old.", options: ["take care", "take care of", "take after", "take off"], correct: 1, explanation: "take care of 照顾" },
+            { question: "He has ___ his cold.", options: ["got over", "got on", "got up", "got off"], correct: 0, explanation: "get over 从…中恢复，克服" },
+            { question: "The plane will ___ in ten minutes.", options: ["take off", "take care", "take after", "take up"], correct: 0, explanation: "take off 起飞" }
         ];
 
-        // ===== 初中口语交际题库（新课标功能意念项目）=====
+        // ===== 初中口语交际题库（新课标功能意念项目全覆盖 40题）=====
         const SPEAKING_QUESTIONS = [
+            // ── 1. 问候与告别 ──
             { scenario: "早上见到老师，你应该说：", options: ["Good morning, teacher!", "Goodbye, teacher!", "Good night, teacher!", "See you, teacher!"], correct: 0, explanation: "Good morning 是早上问候的标准用语" },
+            { scenario: "放学和朋友告别，你说：", options: ["Good morning!", "Goodbye! See you tomorrow!", "How are you?", "Thank you!"], correct: 1, explanation: "Goodbye/See you 是告别用语" },
+            { scenario: "晚上睡觉前对父母说：", options: ["Good morning!", "Good afternoon!", "Good night!", "Hello!"], correct: 2, explanation: "Good night 是睡前晚安用语" },
+            { scenario: "好久不见的朋友，你说：", options: ["How do you do?", "Long time no see!", "Goodbye!", "I'm sorry."], correct: 1, explanation: "Long time no see! 是好久不见的常用表达" },
+
+            // ── 2. 介绍与自我介绍 ──
+            { scenario: "你想介绍自己，可以说：", options: ["This is Tom.", "I am Tom.", "He is Tom.", "You are Tom."], correct: 1, explanation: "I am... 用于自我介绍" },
+            { scenario: "向朋友介绍你的新同学：", options: ["He is new.", "This is my new classmate, Jack.", "I am Jack.", "Where is Jack?"], correct: 1, explanation: "This is... 用于介绍他人" },
+            { scenario: "别人问你 'How are you?'，你回答：", options: ["I'm 12.", "I'm fine, thank you.", "My name is Tom.", "I'm from China."], correct: 1, explanation: "I'm fine, thank you. 是标准回应" },
+
+            // ── 3. 感谢与道歉 ──
             { scenario: "别人帮助你后，你说：", options: ["Thank you!", "Sorry!", "Goodbye!", "Hello!"], correct: 0, explanation: "Thank you 用于表达感谢" },
             { scenario: "你不小心撞到别人，应该说：", options: ["Excuse me", "Thank you", "I'm sorry", "Goodbye"], correct: 2, explanation: "I'm sorry 用于道歉" },
-            { scenario: "你想知道对方名字，可以问：", options: ["How are you?", "What's your name?", "How old are you?", "Where are you?"], correct: 1, explanation: "What's your name? 用于询问姓名" },
-            { scenario: "别人问你 'How are you?'，你回答：", options: ["I'm 12.", "I'm fine, thank you.", "My name is Tom.", "I'm from China."], correct: 1, explanation: "I'm fine, thank you. 是标准回应" },
-            { scenario: "你想介绍自己，可以说：", options: ["This is Tom.", "I am Tom.", "He is Tom.", "You are Tom."], correct: 1, explanation: "I am... 用于自我介绍" },
+            { scenario: "别人对你说 'Thank you'，你回答：", options: ["I'm sorry.", "That's right.", "You're welcome.", "Goodbye."], correct: 2, explanation: "You're welcome 是对感谢的标准回应" },
+            { scenario: "你迟到了，进教室时应该说：", options: ["I'm sorry I'm late.", "Thank you.", "Excuse me to late.", "Hello!"], correct: 0, explanation: "I'm sorry I'm late. 迟到道歉的标准说法" },
+
+            // ── 4. 请求与许可 ──
             { scenario: "请别人帮你拿东西，你说：", options: ["Give me that!", "Could you pass me that, please?", "I want that!", "Take me that!"], correct: 1, explanation: "Could you... please? 是礼貌请求" },
-            { scenario: "你想问路，应该先说：", options: ["Hey!", "Excuse me.", "Stop!", "Look!"], correct: 1, explanation: "Excuse me 用于打扰别人前" },
-            { scenario: "别人说 'Excuse me'，你应该说：", options: ["What?", "Yes?", "No!", "Go away!"], correct: 1, explanation: "Yes? 表示'怎么了？/什么事？'" },
+            { scenario: "请求允许：'我可以坐下吗？'", options: ["Can I sit down?", "Sit down?", "I sit down?", "Am I sit down?"], correct: 0, explanation: "Can I + 动词原形，请求许可" },
+            { scenario: "在图书馆想借书，你说：", options: ["Give me a book!", "Can I borrow this book?", "I want book!", "Book please!"], correct: 1, explanation: "Can I borrow...? 是请求借东西的礼貌说法" },
+            { scenario: "你想用同学的手机打电话，说：", options: ["Give me your phone!", "May I use your phone?", "I need phone!", "Phone me!"], correct: 1, explanation: "May I...? 比 Can I 更正式礼貌" },
+
+            // ── 5. 邀请与建议 ──
             { scenario: "你想邀请朋友一起玩，说：", options: ["Let's play together!", "Play together!", "You play!", "I play!"], correct: 0, explanation: "Let's + 动词原形 表示建议" },
-            { scenario: "打电话时，你介绍自己说：", options: ["I am Tom.", "This is Tom speaking.", "My name is Tom.", "Tom is here."], correct: 1, explanation: "电话中介绍自己用 This is... speaking." },
-            { scenario: "你想问对方的爱好，可以说：", options: ["What's your name?", "What's your hobby?", "How are you?", "Where do you live?"], correct: 1, explanation: "What's your hobby? 询问爱好" },
-            { scenario: "别人问你 'What's your favorite color?'，你答：", options: ["I'm 12.", "My favorite color is blue.", "I'm fine.", "Thank you."], correct: 1, explanation: "My favorite color is... 回答最喜欢的颜色" },
+            { scenario: "朋友看起来不开心，你建议说：", options: ["Don't cry!", "Why not go for a walk?", "Go away!", "I don't care."], correct: 1, explanation: "Why not + 动词原形？表示建议" },
+            { scenario: "你想约同学周末去看电影：", options: ["Go to movies!", "Would you like to go to the movies with me?", "I go movies!", "Movies is fun!"], correct: 1, explanation: "Would you like to...? 是礼貌的邀请" },
+            { scenario: "朋友拒绝了你的邀请，你说：", options: ["You must come!", "Maybe next time.", "I'm angry.", "You're wrong."], correct: 1, explanation: "Maybe next time. 礼貌地接受拒绝" },
+
+            // ── 6. 问路与指路 ──
+            { scenario: "你想问路，应该先说：", options: ["Hey!", "Excuse me.", "Stop!", "Look!"], correct: 1, explanation: "Excuse me 用于打扰别人前" },
+            { scenario: "别人问路，你想说'直走然后左转'：", options: ["Go straight and turn left.", "Go and left.", "Walk and turn.", "Straight left."], correct: 0, explanation: "Go straight and turn left. 是标准指路表达" },
+            { scenario: "你想问图书馆在哪里，你说：", options: ["Where is the library?", "Library where?", "Is library where?", "Library is where?"], correct: 0, explanation: "Where is...? 是标准问地点的句型" },
+
+            // ── 7. 购物与消费 ──
+            { scenario: "在商店，你想试穿衣服，说：", options: ["I want try.", "Can I try it on?", "Try it on.", "Give me try."], correct: 1, explanation: "Can I try it on? 请求试穿" },
+            { scenario: "你想问这件衣服多少钱：", options: ["How much money?", "How much is this?", "What money?", "It's expensive?"], correct: 1, explanation: "How much is...? 是询问价格的标准问法" },
             { scenario: "在餐厅点餐，你说：", options: ["I want food!", "I'd like a hamburger, please.", "Give me hamburger!", "Food please!"], correct: 1, explanation: "I'd like... please. 是点餐的礼貌说法" },
+
+            // ── 8. 就餐 ──
+            { scenario: "服务员问你想喝什么，你回答：", options: ["I want drink.", "I'd like a glass of water, please.", "Give water.", "Drink!"], correct: 1, explanation: "I'd like a glass of..., please. 是点饮料的礼貌说法" },
+            { scenario: "吃完饭你想结账，说：", options: ["Money!", "Could I have the bill, please?", "I go now!", "Food done!"], correct: 1, explanation: "Could I have the bill, please? 是结账的礼貌说法" },
+
+            // ── 9. 看病 ──
+            { scenario: "去医院看病，医生问你：", options: ["How are you?", "What's the matter?", "Where are you?", "Who are you?"], correct: 1, explanation: "What's the matter? 医生询问病情" },
+            { scenario: "你告诉医生你肚子疼：", options: ["I stomach.", "I have a stomachache.", "Stomach pain!", "My stomach bad!"], correct: 1, explanation: "I have a stomachache. 是描述症状的标准说法" },
+
+            // ── 10. 表达情感 ──
+            { scenario: "考试得了满分，你高兴地说：", options: ["I'm sad.", "I'm so excited! I got full marks!", "It's boring.", "I don't care."], correct: 1, explanation: "I'm so excited! 表达兴奋的情感" },
+            { scenario: "你丢失了心爱的钢笔，感到伤心：", options: ["I'm happy.", "I'm very sad. I lost my pen.", "It's okay.", "No problem."], correct: 1, explanation: "I'm very sad. 表达伤心的情感" },
+            { scenario: "看到很可怕的蛇，你害怕地说：", options: ["I'm excited!", "I'm scared!", "I'm bored.", "I'm angry."], correct: 1, explanation: "I'm scared! 表达害怕的情感" },
+            { scenario: "朋友让你等了很久，你有些生气：", options: ["I'm so happy!", "I'm angry. You kept me waiting!", "I'm scared.", "I'm tired."], correct: 1, explanation: "I'm angry. 表达生气的情感" },
+
+            // ── 11. 表达态度与观点 ──
+            { scenario: "表达'我同意你的看法'：", options: ["I agree with you.", "I am agree.", "Yes, I think.", "You're right, I think."], correct: 0, explanation: "I agree with you. 表示同意" },
+            { scenario: "你觉得学英语很重要，你说：", options: ["English is bad.", "I think learning English is very important.", "I don't like English.", "English no good."], correct: 1, explanation: "I think... is very important. 表达观点" },
+            { scenario: "你不同意对方的看法，礼貌地说：", options: ["You're wrong!", "I'm afraid I disagree.", "No no no!", "I hate you."], correct: 1, explanation: "I'm afraid I disagree. 是礼貌地表达不同意" },
+            { scenario: "别人问你周末计划，你说'我还没决定'：", options: ["I have plan.", "I haven't decided yet.", "I no decide.", "Not decide."], correct: 1, explanation: "I haven't decided yet. 表达尚未决定" },
+            { scenario: "你更喜欢数学而不是英语，你说：", options: ["I like math not English.", "I prefer math to English.", "Math good English bad.", "English I no like."], correct: 1, explanation: "I prefer A to B. 表示'比起B更喜欢A'" },
+
+            // ── 12. 逻辑推理 ──
+            { scenario: "地上全是湿的，你推断说：", options: ["It's sunny.", "It must have rained last night.", "It's cold.", "Someone spilled water."], correct: 1, explanation: "It must have rained. 基于事实的逻辑推断" },
+            { scenario: "朋友没来上学，你推测原因：", options: ["He is happy.", "He might be sick.", "He likes school.", "He is playing."], correct: 1, explanation: "He might be sick. 用 might 表推测" },
+
+            // ── 13. 打电话 ──
+            { scenario: "打电话时，你介绍自己说：", options: ["I am Tom.", "This is Tom speaking.", "My name is Tom.", "Tom is here."], correct: 1, explanation: "电话中介绍自己用 This is... speaking." },
+            { scenario: "打电话想找李明，你说：", options: ["I want Li Ming!", "May I speak to Li Ming?", "Where is Li Ming?", "Li Ming come!"], correct: 1, explanation: "May I speak to...? 是打电话找人的礼貌说法" },
+            { scenario: "接到电话但对方打错了，你说：", options: ["Go away!", "Sorry, you have the wrong number.", "I don't know.", "Who are you?"], correct: 1, explanation: "You have the wrong number. 提示对方打错了" },
+
+            // ── 补充：日常交际 ──
+            { scenario: "别人说 'Excuse me'，你应该说：", options: ["What?", "Yes?", "No!", "Go away!"], correct: 1, explanation: "Yes? 表示'怎么了？/什么事？'" },
+            { scenario: "你想知道对方名字，可以问：", options: ["How are you?", "What's your name?", "How old are you?", "Where are you?"], correct: 1, explanation: "What's your name? 用于询问姓名" },
             { scenario: "问别人会不会说英语：", options: ["Do you speak English?", "You speak English?", "English you speak?", "Speak English?"], correct: 0, explanation: "Do you speak...? 是标准疑问句" },
             { scenario: "你想表达'我不明白'，说：", options: ["I'm not understand.", "I don't understand.", "I not understand.", "Not understand."], correct: 1, explanation: "I don't understand. 是正确表达" },
-            { scenario: "请求允许：'我可以坐下吗？'", options: ["Can I sit down?", "Sit down?", "I sit down?", "Am I sit down?"], correct: 0, explanation: "Can I + 动词原形，请求许可" },
-            { scenario: "别人问 'Can you help me?'，你答：", options: ["No.", "Yes, I can.", "I can't.", "You're welcome."], correct: 1, explanation: "Yes, I can. 是肯定回答" },
-            { scenario: "告别时，你说：", options: ["Hello!", "Goodbye! See you!", "Thank you!", "How are you?"], correct: 1, explanation: "Goodbye! See you! 是告别用语" },
-            { scenario: "你想知道时间，问：", options: ["What time is it?", "Time is what?", "It is time?", "Time what?"], correct: 0, explanation: "What time is it? 询问时间" },
-            { scenario: "夸奖别人：'你的衣服很漂亮！'", options: ["You clothes beautiful!", "Your clothes are beautiful!", "Clothes beautiful!", "Beautiful clothes!"], correct: 1, explanation: "Your clothes are beautiful! 是完整句子" },
             { scenario: "问别人来自哪里：", options: ["Where you from?", "Where are you from?", "You from where?", "From where?"], correct: 1, explanation: "Where are you from? 是标准问法" },
-            { scenario: "表达'我同意你的看法'：", options: ["I agree with you.", "I am agree.", "Yes, I think.", "You're right, I think."], correct: 0, explanation: "I agree with you. 表示同意" },
             { scenario: "问别人多大年龄：", options: ["How old are you?", "How are you?", "What old you?", "Old you are?"], correct: 0, explanation: "How old are you? 询问年龄" },
-            { scenario: "在商店，你想试穿衣服，说：", options: ["I want try.", "Can I try it on?", "Try it on.", "Give me try."], correct: 1, explanation: "Can I try it on? 请求试穿" },
-            { scenario: "看到别人不舒服，你问：", options: ["How are you?", "What's wrong?", "Where are you?", "Who are you?"], correct: 1, explanation: "What's wrong? 询问对方怎么了" },
-            { scenario: "去医院看病，医生问你：", options: ["How are you?", "What's the matter?", "Where are you?", "Who are you?"], correct: 1, explanation: "What's the matter? 医生询问病情" },
             { scenario: "祝贺别人考试取得好成绩，你说：", options: ["I'm sorry.", "Congratulations!", "Thank you!", "Goodbye!"], correct: 1, explanation: "Congratulations! 用于祝贺" },
+            { scenario: "看到别人不舒服，你问：", options: ["How are you?", "What's wrong?", "Where are you?", "Who are you?"], correct: 1, explanation: "What's wrong? 询问对方怎么了" },
+            { scenario: "夸奖别人：'你的衣服很漂亮！'", options: ["You clothes beautiful!", "Your clothes are beautiful!", "Clothes beautiful!", "Beautiful clothes!"], correct: 1, explanation: "Your clothes are beautiful! 是完整句子" },
             { scenario: "别人说 'Congratulations!'，你回答：", options: ["Congratulations!", "Thank you!", "I'm sorry.", "Goodbye!"], correct: 1, explanation: "对祝贺的回应是 Thank you" }
         ];
 
         function shuffleArray(arr) { const a = [...arr]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-        
+
         function generateVocabQuestions(count) {
             const shuffled = [...ALL_WORDS].sort(() => Math.random() - 0.5).slice(0, count);
             return shuffled.map(word => {
-                const correctCN = WORD_MEANING[word] || `(未知)`;
+                const correctCN = WORD_MEANING[word] || "(未知)";
                 const distractors = [];
                 const others = Object.keys(WORD_MEANING).filter(w => w !== word);
                 while (distractors.length < 3) {
@@ -304,13 +464,13 @@
                 return { type: 'vocab', english: word, options, correct: options.indexOf(correctCN) };
             });
         }
-        
-        function generateGrammarQuestions(count) { 
-            return [...GRAMMAR_QUESTIONS].sort(() => Math.random() - 0.5).slice(0, count); 
+
+        function generateGrammarQuestions(count) {
+            return shuffleArray(GRAMMAR_QUESTIONS).slice(0, count);
         }
-        
-        function generateSpeakingQuestions(count) { 
-            return [...SPEAKING_QUESTIONS].sort(() => Math.random() - 0.5).slice(0, count); 
+
+        function generateSpeakingQuestions(count) {
+            return shuffleArray(SPEAKING_QUESTIONS).slice(0, count);
         }
 
         const TOTAL_LIVES = 3;
@@ -344,29 +504,29 @@
             const correctAnswer = q.options[q.correct];
             const wrongAnswer = (wrongIdx !== undefined && wrongIdx >= 0) ? q.options[wrongIdx] : null;
             if (q.type === 'vocab') {
-                let msg = `正确答案是"${correctAnswer}"。"${q.english}"的意思是"${correctAnswer}"`;
-                if (wrongAnswer) msg += `，不是"${wrongAnswer}"`;
+                let msg = '正确答案是"' + correctAnswer + '"。"' + q.english + '"的意思是"' + correctAnswer + '"';
+                if (wrongAnswer) msg += '，不是"' + wrongAnswer + '"';
                 return msg + '。';
             }
             if (q.type === 'grammar') {
-                let msg = `正确答案是"${correctAnswer}"。`;
-                if (wrongAnswer) msg += `你选的"${wrongAnswer}"是错的，`;
-                if (q.explanation) msg += `📖 ${q.explanation}`;
+                let msg = '正确答案是"' + correctAnswer + '"。';
+                if (wrongAnswer) msg += '你选的"' + wrongAnswer + '"是错的，';
+                if (q.explanation) msg += '\uD83D\uDCD6 ' + q.explanation;
                 else msg += '请记住这个语法点。';
                 return msg;
             }
             if (q.type === 'speaking') {
-                let msg = `正确答案是"${correctAnswer}"。`;
-                if (wrongAnswer) msg += `"${wrongAnswer}"不是地道的表达，`;
-                if (q.explanation) msg += `💬 ${q.explanation}`;
+                let msg = '正确答案是"' + correctAnswer + '"。';
+                if (wrongAnswer) msg += '"' + wrongAnswer + '"不是地道的表达，';
+                if (q.explanation) msg += '\uD83D\uDCAC ' + q.explanation;
                 else msg += '这是日常交际用语的正确表达方式。';
                 return msg;
             }
-            return `正确答案是"${correctAnswer}"。`;
+            return '正确答案是"' + correctAnswer + '"。';
         }
 
         function getQuestionDisplay(q) {
-            if (q.type === 'vocab') return `"${q.english}" 的中文意思是？`;
+            if (q.type === 'vocab') return '"' + q.english + '" 的中文意思是？';
             if (q.type === 'grammar') return q.question || '（题目缺失）';
             return q.scenario;
         }
@@ -386,17 +546,13 @@
 
         function renderStart() {
             const streak = getStreak();
-            const soundLabel = _soundEnabled ? '🔊 声音已开启' : '🔇 点击开启声音';
-            container.innerHTML = `
-                <div class="dino">📚</div>
-                <h1>初中英语通关游戏</h1>
-                <p>📝词汇1600+ | 📐语法30+ | 💬口语30+</p>
-                <button class="btn sound-btn" onclick="game.toggleSound()">${soundLabel}</button>
-                <br>
-                <button class="btn start-btn" onclick="game.startDaily()" style="background:#27ae60;box-shadow:0 5px 0 #1e8449;">📅 每日打卡</button>
-                <button class="btn start-btn" style="background:#2980b9;box-shadow:0 5px 0 #1c5980;" onclick="game.startGame()">自由闯关 🚀</button>
-                <p style="margin-top:15px;">🔥 连续打卡 ${streak} 天</p>
-            `;
+            container.innerHTML = '<div class="dino">\uD83D\uDCDA</div>' +
+                '<h1>初中英语通关游戏</h1>' +
+                '<p>\uD83D\uDCDD词汇500+ | \uD83D\uDCD7语法75+ | \uD83D\uDCAC口语40+</p>' +
+                '<br>' +
+                '<button class="btn start-btn" onclick="game.startDaily()" style="background:#27ae60;box-shadow:0 5px 0 #1e8449;">\uD83D\uDCC5 每日打卡</button>' +
+                '<button class="btn start-btn" style="background:#2980b9;box-shadow:0 5px 0 #1c5980;" onclick="game.startGame()">自由闯关 \uD83D\uDE80</button>' +
+                '<p style="margin-top:15px;">\uD83D\uDD25 连续打卡 ' + streak + ' 天</p>';
         }
 
         function renderDaily() {
@@ -404,36 +560,24 @@
             const progress = getDailyProgress();
             const streak = getStreak();
             if (!target) {
-                container.innerHTML = `<h2>设定每日学习目标</h2><p>你想要每天学习多少个单词？</p><div class="goal-select">${[5,10,15,20,30,40].map(n=>`<button class="goal-btn" onclick="game.setDailyGoal(${n})">${n} 个</button>`).join('')}</div><button class="btn" onclick="game.goToStart()">返回</button>`;
+                container.innerHTML = '<h2>设定每日学习目标</h2><p>你想要每天学习多少个单词？</p><div class="goal-select">' + [5,10,15,20,30,40].map(n=>'<button class="goal-btn" onclick="game.setDailyGoal('+n+')">'+n+' 个</button>').join('') + '</div><button class="btn" onclick="game.goToStart()">返回</button>';
                 return;
             }
             const done = progress >= target;
-            container.innerHTML = `<h2>📅 今日打卡</h2><p>目标：${target} 个单词</p><div class="daily-progress">✅ ${progress} / ${target}</div><div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100,(progress/target)*100)}%;"></div></div><p>🔥 已连续打卡 ${streak} 天</p>${done?`<p style="color:green;font-size:1.5rem;">🎉 今日目标已完成！</p>`:`<button class="btn" onclick="game.startDailyVocab()">开始今日学习</button>`}<button class="btn" onclick="game.goToStart()" style="background:#95a5a6;">返回首页</button><button class="btn" onclick="game.resetDaily()" style="background:#e74c3c;box-shadow:0 5px 0 #c0392b;">重新设定目标</button>`;
+            container.innerHTML = '<h2>\uD83D\uDCC5 今日打卡</h2><p>目标：'+target+' 个单词</p><div class="daily-progress">\u2705 '+progress+' / '+target+'</div><div class="progress-bar"><div class="progress-fill" style="width:'+Math.min(100,(progress/target)*100)+'%;"></div></div><p>\uD83D\uDD25 已连续打卡 '+streak+' 天</p>'+(done?'<p style="color:green;font-size:1.5rem;">\uD83C\uDF89 今日目标已完成！</p>':'<button class="btn" onclick="game.startDailyVocab()">开始今日学习</button>')+'<button class="btn" onclick="game.goToStart()" style="background:#95a5a6;">返回首页</button><button class="btn" onclick="game.resetDaily()" style="background:#e74c3c;box-shadow:0 5px 0 #c0392b;">重新设定目标</button>';
         }
 
         function renderWorldSelect() {
             const s = state.collectedStars;
-            container.innerHTML = `
-                <h2>选择关卡</h2>
-                <div class="world-card" onclick="game.selectWorld('vocab')">
-                    <div class="world-icon">📝</div>
-                    <div>词汇乐园</div>
-                    <div class="stars">${'⭐'.repeat(s.vocab||0)}</div>
-                </div>
-                <div class="world-card" onclick="game.selectWorld('grammar')">
-                    <div class="world-icon">📐</div>
-                    <div>语法挑战</div>
-                    <div class="stars">${'⭐'.repeat(s.grammar||0)}</div>
-                </div>
-                <div class="world-card" onclick="game.selectWorld('speaking')">
-                    <div class="world-icon">💬</div>
-                    <div>口语实战</div>
-                    <div class="stars">${'⭐'.repeat(s.speaking||0)}</div>
-                </div>
-                <br>
-                <button class="btn" onclick="game.goToStart()" style="background:#95a5a6;">返回首页</button>
-                <p>生命：${'❤️'.repeat(state.lives)}</p>
-            `;
+            container.innerHTML = '<h2>选择关卡</h2>' +
+                '<div class="world-card" onclick="game.selectWorld(\'vocab\')">' +
+                '<div class="world-icon">\uD83D\uDCDD</div><div>词汇乐园</div><div class="stars">' + '\u2B50'.repeat(s.vocab||0) + '</div></div>' +
+                '<div class="world-card" onclick="game.selectWorld(\'grammar\')">' +
+                '<div class="world-icon">\uD83D\uDCD7</div><div>语法挑战</div><div class="stars">' + '\u2B50'.repeat(s.grammar||0) + '</div></div>' +
+                '<div class="world-card" onclick="game.selectWorld(\'speaking\')">' +
+                '<div class="world-icon">\uD83D\uDCAC</div><div>口语实战</div><div class="stars">' + '\u2B50'.repeat(s.speaking||0) + '</div></div>' +
+                '<br><button class="btn" onclick="game.goToStart()" style="background:#95a5a6;">返回首页</button>' +
+                '<p>生命：' + '\u2764\uFE0F'.repeat(state.lives) + '</p>';
         }
 
         function renderPlaying() {
@@ -441,26 +585,23 @@
             if (!q) return;
             const progress = (state.currentIndex / state.questions.length) * 100;
             let html = '';
-            const modeLabel = state.isReviewMode ? '🔄错题重做' : (state.dailyMode ? '📅每日打卡' : ({vocab:'📝词汇',grammar:'📐语法',speaking:'💬口语'})[state.currentWorld]);
-            
-            if (q.type === 'vocab') html = `<div class="question-text">"${q.english}" 的中文意思是？</div>`;
-            else if (q.type === 'grammar') html = `<div class="question-text">${q.question || '（题目缺失）'}</div>`;
-            else html = `<div class="question-text">${q.scenario}</div><button class="btn" id="btnReadScenario" style="font-size:1rem;padding:8px 20px;">🔊 听发音</button>`;
-            
-            const opts = q.options.map((opt,i)=>`<button class="option-btn" data-action="answer" data-idx="${i}">${opt}</button>`).join('');
-            const feedbackClass = state.feedback && state.feedback.includes('❌') ? 'feedback-msg explain' : 'feedback-msg';
-            container.innerHTML = `
-                <div class="header">
-                    <span class="lives">${'❤️'.repeat(state.lives)}</span>
-                    <span>${modeLabel}</span>
-                    <span class="score">⭐ ${state.stars}</span>
-                </div>
-                <div class="progress-bar"><div class="progress-fill" style="width:${progress}%;"></div></div>
-                <div class="timer">⏳ ${state.timeLeft}</div>
-                <div class="question-area">${html}</div>
-                <div class="options">${opts}</div>
-                <div class="${feedbackClass}">${state.feedback||''}</div>
-            `;
+            const modeLabel = state.isReviewMode ? '\uD83D\uDD04错题重做' : (state.dailyMode ? '\uD83D\uDCC5每日打卡' : ({vocab:'\uD83D\uDCDD词汇',grammar:'\uD83D\uDCD7语法',speaking:'\uD83D\uDCAC口语'})[state.currentWorld]);
+
+            if (q.type === 'vocab') html = '<div class="question-text">"' + q.english + '" 的中文意思是？</div>';
+            else if (q.type === 'grammar') html = '<div class="question-text">' + (q.question || '（题目缺失）') + '</div>';
+            else html = '<div class="question-text">' + q.scenario + '</div><button class="btn" id="btnReadScenario" style="font-size:1rem;padding:8px 20px;">\uD83D\uDD0A 听发音</button>';
+
+            const opts = q.options.map((opt,i)=>'<button class="option-btn" data-action="answer" data-idx="'+i+'">'+opt+'</button>').join('');
+            const feedbackClass = state.feedback && state.feedback.includes('\u274C') ? 'feedback-msg explain' : 'feedback-msg';
+            container.innerHTML = '<div class="header">' +
+                '<span class="lives">' + '\u2764\uFE0F'.repeat(state.lives) + '</span>' +
+                '<span>'+modeLabel+'</span>' +
+                '<span class="score">\u2B50 '+state.stars+'</span></div>' +
+                '<div class="progress-bar"><div class="progress-fill" style="width:'+progress+'%;"></div></div>' +
+                '<div class="timer">\u23F3 '+state.timeLeft+'</div>' +
+                '<div class="question-area">'+html+'</div>' +
+                '<div class="options">'+opts+'</div>' +
+                '<div class="'+feedbackClass+'">'+(state.feedback||'')+'</div>';
         }
 
         function renderReview() {
@@ -472,18 +613,17 @@
                 const correctAns = q.options[q.correct];
                 const wrongAns = item.wrongAnswer;
                 const explain = getExplanation(q, -1);
-                return `<div class="review-item"><div class="review-q">${i+1}. ${qText}</div><div class="review-wrong">❌ 你选的：${wrongAns}</div><div class="review-correct">✅ 正确答案：${correctAns}</div><div class="review-explain">${q.explanation || explain}</div></div>`;
+                return '<div class="review-item"><div class="review-q">'+(i+1)+'. '+qText+'</div><div class="review-wrong">\u274C 你选的：'+wrongAns+'</div><div class="review-correct">\u2705 正确答案：'+correctAns+'</div><div class="review-explain">'+(q.explanation||explain)+'</div></div>';
             }).join('');
-            container.innerHTML = `<h2>📋 错题回顾 <span class="review-label">${wq.length} 题</span></h2><div class="review-scroll">${reviewHtml}</div><button class="btn start-btn" onclick="game.startReviewRedo()">🔄 重做错题</button><button class="btn" onclick="game.skipReview()">跳过</button>`;
+            container.innerHTML = '<h2>\uD83D\uDCCB 错题回顾 <span class="review-label">'+wq.length+' 题</span></h2><div class="review-scroll">'+reviewHtml+'</div><button class="btn start-btn" onclick="game.startReviewRedo()">\uD83D\uDD04 重做错题</button><button class="btn" onclick="game.skipReview()">跳过</button>';
         }
 
         function renderResult() {
             const t = state.totalStars;
-            let cert = t>=7?'<div class="certificate">🎉 太棒了！你已掌握初中英语！</div>':(t>=4?'<div class="certificate">👍 不错，继续加油！</div>':'<div class="certificate">💪 多多练习，你会进步的！</div>');
-            container.innerHTML = `<div class="dino">📚🎉</div><h2>闯关完成！</h2><p>总分：${state.score}</p><p>总星星：${'⭐'.repeat(t)} (${t}/9)</p>${cert}<button class="btn" onclick="game.restart()">再玩一次</button><button class="btn" onclick="game.goToStart()">返回首页</button>`;
+            let cert = t>=7?'<div class="certificate">\uD83C\uDF89 太棒了！你已掌握初中英语！</div>':(t>=4?'<div class="certificate">\uD83D\uDC4D 不错，继续加油！</div>':'<div class="certificate">\uD83D\uDCAA 多多练习，你会进步的！</div>');
+            container.innerHTML = '<div class="dino">\uD83D\uDCDA\uD83C\uDF89</div><h2>闯关完成！</h2><p>总分：'+state.score+'</p><p>总星星：'+'\u2B50'.repeat(t)+' ('+t+'/9)</p>'+cert+'<button class="btn" onclick="game.restart()">再玩一次</button><button class="btn" onclick="game.goToStart()">返回首页</button>';
         }
 
-        // ===== 事件处理 =====
         container.addEventListener('click', function(e) {
             const btn = e.target.closest('[data-action]');
             if (!btn) return;
@@ -498,7 +638,7 @@
             if (e.target.id === 'btnReadScenario' || e.target.closest('#btnReadScenario')) {
                 const q = state.questions[state.currentIndex];
                 if (q && q.type === 'speaking') {
-                    unlockAll();
+                    unlockAudio();
                     speakNow(q.options[q.correct]);
                 }
             }
@@ -511,11 +651,11 @@
             state.wrongQuestions=[];
             state.screen='selectWorld'; render();
         }
-        
+
         function startDaily() { state.screen='daily'; render(); }
         function setDailyGoal(n) { setDailyTarget(n); setDailyProgress(0); render(); }
         function resetDaily() { localStorage.removeItem(STORAGE_KEY_TARGET); localStorage.removeItem(STORAGE_KEY_PROGRESS); render(); }
-        
+
         function startDailyVocab() {
             const target = getDailyTarget();
             if (!target) return;
@@ -526,7 +666,7 @@
             state.questions = generateVocabQuestions(target);
             state.screen = 'playing'; startTimer(); render();
         }
-        
+
         function selectWorld(world) {
             state.dailyMode = false; state.isReviewMode = false;
             state.currentWorld=world; state.currentIndex=0; state.currentCorrectCount=0;
@@ -536,16 +676,16 @@
             else state.questions=generateSpeakingQuestions(Math.min(QUESTIONS_PER_ROUND, SPEAKING_QUESTIONS.length));
             state.screen='playing'; startTimer(); render();
         }
-        
+
         function startTimer() {
             clearInterval(state.timerInterval); state.timeLeft=QUESTION_TIME;
             state.timerInterval = setInterval(() => {
                 state.timeLeft--;
-                const el = document.querySelector('.timer'); if(el) el.textContent = `⏳ ${state.timeLeft}`;
+                const el = document.querySelector('.timer'); if(el) el.textContent = '\u23F3 '+state.timeLeft;
                 if(state.timeLeft<=0) { clearInterval(state.timerInterval); if(state.canAnswer) handleTimeout(); }
             }, 1000);
         }
-        
+
         function answer(idx) {
             if(!state.canAnswer) return;
             state.canAnswer=false; clearInterval(state.timerInterval);
@@ -558,33 +698,31 @@
             });
             if(correct) {
                 state.score+=10; state.stars++; state.currentCorrectCount++;
-                state.feedback='✅ 正确！ +10分'; playSound('correct');
-                // 答对后播放发音
+                state.feedback='\u2705 正确！ +10分'; playSound('correct');
                 if(q.type==='vocab') speakNow(q.english);
-                else if(q.type==='speaking') speakNow(q.options[q.correct]);
                 else speakNow(q.options[q.correct]);
             } else {
                 state.lives--;
-                state.wrongQuestions.push({ question: {...q}, wrongAnswer: q.options[idx], wrongIdx: idx });
-                state.feedback = `❌ 错误！生命-1\n${getExplanation(q, idx)}`;
+                state.wrongQuestions.push({ question: Object.assign({}, q), wrongAnswer: q.options[idx], wrongIdx: idx });
+                state.feedback = '\u274C 错误！生命-1\n' + getExplanation(q, idx);
                 playSound('wrong');
                 speakNow(q.options[q.correct]);
             }
             const delay = correct ? 2000 : 3500;
             setTimeout(()=>{ if(state.lives<=0) gameOver(); else nextQuestion(); }, delay);
         }
-        
+
         function handleTimeout() {
             state.canAnswer=false; state.lives--;
             const q = state.questions[state.currentIndex];
-            state.wrongQuestions.push({ question: {...q}, wrongAnswer: '（未作答）', wrongIdx: -1 });
-            state.feedback = `⏰ 时间到！生命-1\n${getExplanation(q)}`;
+            state.wrongQuestions.push({ question: Object.assign({}, q), wrongAnswer: '（未作答）', wrongIdx: -1 });
+            state.feedback = '\u23F0 时间到！生命-1\n' + getExplanation(q);
             playSound('wrong');
-            const btn = document.querySelector(`[data-idx="${q.correct}"]`); if(btn) btn.classList.add('correct');
+            const btn = document.querySelector('[data-idx="'+q.correct+'"]'); if(btn) btn.classList.add('correct');
             speakNow(q.options[q.correct]);
             setTimeout(()=>{ if(state.lives<=0) gameOver(); else nextQuestion(); }, 3500);
         }
-        
+
         function nextQuestion() {
             state.currentIndex++;
             if(state.currentIndex >= state.questions.length) {
@@ -593,7 +731,7 @@
                 else finishWorld();
             } else { state.canAnswer=true; state.feedback=''; startTimer(); render(); }
         }
-        
+
         function finishWorld() {
             clearInterval(state.timerInterval);
             const total=state.questions.length, correct=state.currentCorrectCount;
@@ -607,10 +745,11 @@
                 state.screen = 'review'; render();
             } else {
                 state.currentCorrectCount=0;
-                container.innerHTML = `<h2>${({vocab:'📝词汇乐园',grammar:'📐语法挑战',speaking:'💬口语实战'})[state.currentWorld]} 完成！</h2><div style="font-size:2rem;">${'⭐'.repeat(stars)}</div><p>全部正确！🎉 获得 ${stars} 颗星</p><button class="btn" onclick="game.continueAdventure()">继续冒险</button>`;
+                const worldName = ({vocab:'\uD83D\uDCDD词汇乐园',grammar:'\uD83D\uDCD7语法挑战',speaking:'\uD83D\uDCAC口语实战'})[state.currentWorld];
+                container.innerHTML = '<h2>'+worldName+' 完成！</h2><div style="font-size:2rem;">'+'\u2B50'.repeat(stars)+'</div><p>全部正确！\uD83C\uDF89 获得 '+stars+' 颗星</p><button class="btn" onclick="game.continueAdventure()">继续冒险</button>';
             }
         }
-        
+
         function finishDaily() {
             clearInterval(state.timerInterval);
             const total = state.questions.length;
@@ -621,7 +760,7 @@
             }
             completeDaily(total, correct);
         }
-        
+
         function completeDaily(total, correct) {
             setDailyProgress(total);
             const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10);
@@ -632,16 +771,16 @@
             else if (!hasYesterday) streak = 1;
             setStreak(streak);
             state.dailyMode = false; state.isReviewMode = false;
-            container.innerHTML = `<h2>📅 今日打卡完成！</h2><p>学习了 ${total} 个单词，答对 ${correct} 题</p><p>🔥 连续打卡 ${streak} 天</p><button class="btn" onclick="game.goToStart()">返回首页</button><button class="btn" onclick="game.startDaily()">继续打卡</button>`;
+            container.innerHTML = '<h2>\uD83D\uDCC5 今日打卡完成！</h2><p>学习了 '+total+' 个单词，答对 '+correct+' 题</p><p>\uD83D\uDD25 连续打卡 '+streak+' 天</p><button class="btn" onclick="game.goToStart()">返回首页</button><button class="btn" onclick="game.startDaily()">继续打卡</button>';
         }
-        
+
         function startReviewRedo() {
             if (!state.wrongQuestions.length) return;
             const redoQuestions = state.wrongQuestions.map(item => {
                 const origQ = item.question;
                 const newOpts = shuffleArray(origQ.options);
                 const newCorrect = newOpts.indexOf(origQ.options[origQ.correct]);
-                return { ...origQ, options: newOpts, correct: newCorrect };
+                return Object.assign({}, origQ, { options: newOpts, correct: newCorrect });
             });
             state.questions = redoQuestions;
             state.currentIndex = 0;
@@ -654,7 +793,7 @@
             startTimer();
             render();
         }
-        
+
         function finishReviewRedo() {
             clearInterval(state.timerInterval);
             if (state.wrongQuestions.length > 0) {
@@ -667,11 +806,11 @@
                     const total = state.questions.length;
                     state.currentCorrectCount = 0;
                     state.isReviewMode = false;
-                    container.innerHTML = `<h2>🎉 错题全部做对！</h2><p>太棒了，继续加油！</p><button class="btn" onclick="game.continueAdventure()">继续冒险</button>`;
+                    container.innerHTML = '<h2>\uD83C\uDF89 错题全部做对！</h2><p>太棒了，继续加油！</p><button class="btn" onclick="game.continueAdventure()">继续冒险</button>';
                 }
             }
         }
-        
+
         function skipReview() {
             state.wrongQuestions = [];
             state.isReviewMode = false;
@@ -689,17 +828,18 @@
                 state.collectedStars[state.currentWorld] = stars;
                 state.totalStars = Object.values(state.collectedStars).reduce((a,b)=>a+b,0);
                 state.currentCorrectCount = 0;
-                container.innerHTML = `<h2>${({vocab:'📝词汇乐园',grammar:'📐语法挑战',speaking:'💬口语实战'})[state.currentWorld]} 完成！</h2><div style="font-size:2rem;">${'⭐'.repeat(stars)}</div><p>正确 ${correct}/${total} 题，获得 ${stars} 颗星</p><button class="btn" onclick="game.continueAdventure()">继续冒险</button>`;
+                const worldName = ({vocab:'\uD83D\uDCDD词汇乐园',grammar:'\uD83D\uDCD7语法挑战',speaking:'\uD83D\uDCAC口语实战'})[state.currentWorld];
+                container.innerHTML = '<h2>'+worldName+' 完成！</h2><div style="font-size:2rem;">'+'\u2B50'.repeat(stars)+'</div><p>正确 '+correct+'/'+total+' 题，获得 '+stars+' 颗星</p><button class="btn" onclick="game.continueAdventure()">继续冒险</button>';
             }
         }
-        
+
         function continueAdventure() {
             if(state.lives<=0) { gameOver(); return; }
             const played = Object.values(state.collectedStars).filter(v=>v!==undefined).length;
             if(played>=3) { state.totalStars=Object.values(state.collectedStars).reduce((a,b)=>a+b,0); state.screen='result'; render(); }
             else { state.screen='selectWorld'; render(); }
         }
-        
+
         function gameOver() {
             clearInterval(state.timerInterval);
             if (state.wrongQuestions.length > 0) {
@@ -707,14 +847,17 @@
                 return;
             }
             state.totalStars=Object.values(state.collectedStars).reduce((a,b)=>a+b,0);
-            container.innerHTML = `<div class="dino">😢</div><h2>生命耗尽</h2><p>总分：${state.score}</p><p>总星星：${'⭐'.repeat(state.totalStars)}</p><button class="btn" onclick="game.restart()">重新挑战</button>`;
+            container.innerHTML = '<div class="dino">\uD83D\uDE22</div><h2>生命耗尽</h2><p>总分：'+state.score+'</p><p>总星星：'+'\u2B50'.repeat(state.totalStars)+'</p><button class="btn" onclick="game.restart()">重新挑战</button>';
         }
-        
-        function toggleSound() { unlockAll(); playSound('correct'); _soundEnabled = true; render(); }
+
         function goToStart() { clearInterval(state.timerInterval); state.screen='start'; render(); }
         function restart() { clearInterval(state.timerInterval); startGame(); }
-        
-        window.game = { startGame, startDaily, setDailyGoal, resetDaily, startDailyVocab, selectWorld, answer, continueAdventure, goToStart, restart, toggleSound, startReviewRedo, skipReview };
+
+        window.game = { startGame, startDaily, setDailyGoal, resetDaily, startDailyVocab, selectWorld, answer, continueAdventure, goToStart, restart, startReviewRedo, skipReview };
+
+        // 首次交互时尝试解锁音频上下文
+        try { getAudioCtx(); } catch(e) {}
+
         render();
     })();
 </script>
