@@ -526,9 +526,11 @@
         }
 
         function getQuestionDisplay(q) {
+            if (!q) return '（题目缺失）';
             if (q.type === 'vocab') return '"' + q.english + '" 的中文意思是？';
-            if (q.type === 'grammar') return q.question || '（题目缺失）';
-            return q.scenario;
+            if (q.type === 'grammar') return (q.question || '（题目缺失）');
+            if (q.scenario) return q.scenario;
+            return '（题目缺失）';
         }
 
         const container = document.getElementById('gameContainer');
@@ -587,9 +589,10 @@
             let html = '';
             const modeLabel = state.isReviewMode ? '\uD83D\uDD04错题重做' : (state.dailyMode ? '\uD83D\uDCC5每日打卡' : ({vocab:'\uD83D\uDCDD词汇',grammar:'\uD83D\uDCD7语法',speaking:'\uD83D\uDCAC口语'})[state.currentWorld]);
 
+            const qText = getQuestionDisplay(q);
             if (q.type === 'vocab') html = '<div class="question-text">"' + q.english + '" 的中文意思是？</div>';
-            else if (q.type === 'grammar') html = '<div class="question-text">' + (q.question || '（题目缺失）') + '</div>';
-            else html = '<div class="question-text">' + q.scenario + '</div><button class="btn" id="btnReadScenario" style="font-size:1rem;padding:8px 20px;">\uD83D\uDD0A 听发音</button>';
+            else if (q.type === 'grammar') html = '<div class="question-text">' + qText + '</div>';
+            else html = '<div class="question-text">' + qText + '</div><button class="btn" id="btnReadScenario" style="font-size:1rem;padding:8px 20px;">\uD83D\uDD0A 听发音</button>';
 
             const opts = q.options.map((opt,i)=>'<button class="option-btn" data-action="answer" data-idx="'+i+'">'+opt+'</button>').join('');
             const feedbackClass = state.feedback && state.feedback.includes('\u274C') ? 'feedback-msg explain' : 'feedback-msg';
