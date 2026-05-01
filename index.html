@@ -466,11 +466,11 @@
         }
 
         function generateGrammarQuestions(count) {
-            return shuffleArray(GRAMMAR_QUESTIONS).slice(0, count);
+            return shuffleArray(GRAMMAR_QUESTIONS).slice(0, count).map(q => Object.assign({}, q, {type:'grammar'}));
         }
 
         function generateSpeakingQuestions(count) {
-            return shuffleArray(SPEAKING_QUESTIONS).slice(0, count);
+            return shuffleArray(SPEAKING_QUESTIONS).slice(0, count).map(q => Object.assign({}, q, {type:'speaking'}));
         }
 
         const TOTAL_LIVES = 3;
